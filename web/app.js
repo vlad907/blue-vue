@@ -74,9 +74,33 @@ function renderScenes() {
 document.querySelectorAll("[data-wall-power]").forEach((b) =>
   b.addEventListener("click", () => {
     const on = b.dataset.wallPower === "true";
-    act(() => api("/api/wall/power", { on }), `Wall ${on ? "on" : "off"}`);
+    act(() => api("/api/wall/power", { on }), `All walls ${on ? "on" : "off"}`);
   }),
 );
+
+function renderWalls() {
+  $("#walls").replaceChildren(
+    ...cfg.walls.map((w) => {
+      const ws = state.walls[w.id] ?? { online: false, panels: [] };
+      const onCount = ws.panels.filter((p) => p.power === "on").length;
+      return el("div", { class: `wall${ws.online ? "" : " offline"}` },
+        el("h3", {}, w.name,
+          el("span", { class: `pill ${ws.online ? "ok" : "bad"}` }, ws.online ? `${onCount}/${ws.panels.length} on` : "offline")),
+        ws.error ? el("p", { class: "err" }, ws.error) : null,
+        el("div", { class: "panels" },
+          ...ws.panels.map((p) =>
+            el("button", {
+              class: ["panel", p.power === "on" ? "on" : "", p.confirmed ? "" : "unconfirmed", p.reachable ? "" : "unreachable"].join(" "),
+              title: `${p.name} (${p.driver}): ${p.power}${p.confirmed ? "" : ", not confirmed"}${p.error ? ` - ${p.error}` : ""}`,
+              onclick: () => act(() => api("/api/wall/power", { wall: w.id, panels: [p.id], on: p.power !== "on" }), `${w.name} ${p.name}`),
+            }, p.name))),
+        el("div", { class: "row" },
+          el("button", { class: "btn on", onclick: () => act(() => api("/api/wall/power", { wall: w.id, on: true }), `${w.name} on`) }, "On"),
+          el("button", { class: "btn off", onclick: () => act(() => api("/api/wall/power", { wall: w.id, on: false }), `${w.name} off`) }, "Off")),
+      );
+    }),
+  );
+}
 
 function renderWallPresets() {
   $("#wall-presets").replaceChildren(
@@ -264,7 +288,9 @@ function renderZones() {
 // ---------- Status ----------
 function renderStatus() {
   const pill = (id, text, cls) => { const p = $(id); p.textContent = text; p.className = `pill ${cls}`; };
-  pill("#st-wall", `Wall: ${state.wallPower}`, state.wallPower === "on" ? "ok" : "");
+  const walls = Object.values(state.walls);
+  const online = walls.filter((w) => w.online).length;
+  pill("#st-wall", `Walls ${online}/${walls.length} online`, online === walls.length ? "ok" : online ? "warn" : "bad");
   pill("#st-atlas", state.atlas.connected ? "DSP online" : "DSP offline", state.atlas.connected ? "ok" : "bad");
   pill("#st-vw", state.videoWall.reachable ? "Wall API ok" : "Wall API ?", state.videoWall.reachable ? "ok" : "warn");
   $("#st-busy").hidden = !state.busy;
@@ -274,6 +300,7 @@ function renderAll() {
   renderStatus();
   renderScenes();
   renderWallPresets();
+  renderWalls();
   renderBoxes();
   renderZones();
 }

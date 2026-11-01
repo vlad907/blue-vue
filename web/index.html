@@ -13,7 +13,7 @@
     <h1 id="site">Blue Vue</h1>
     <div class="status">
       <span id="sim" class="pill warn" hidden>SIMULATION</span>
-      <span id="st-wall" class="pill">Wall: ?</span>
+      <span id="st-wall" class="pill">Walls</span>
       <span id="st-atlas" class="pill">DSP</span>
       <span id="st-vw" class="pill">Wall API</span>
       <span id="st-busy" class="pill busy" hidden>Running…</span>
@@ -34,11 +34,12 @@
     </section>
 
     <section id="tab-wall" class="tab">
-      <h2>Power</h2>
+      <h2>All Walls</h2>
       <div class="row">
-        <button class="btn on" data-wall-power="true">Wall On</button>
-        <button class="btn off" data-wall-power="false">Wall Off</button>
+        <button class="btn on" data-wall-power="true">All On</button>
+        <button class="btn off" data-wall-power="false">All Off</button>
       </div>
+      <div id="walls" class="walls"></div>
       <h2>Layout Presets</h2>
       <div id="wall-presets" class="grid"></div>
     </section>

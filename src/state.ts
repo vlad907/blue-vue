@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import type { PanelStatus } from "./drivers/endpoints.ts";
 
 export interface ZoneState {
   gainDb?: number;
@@ -6,9 +7,17 @@ export interface ZoneState {
   source?: number;
 }
 
+export interface WallState {
+  name: string;
+  online: boolean;
+  panels: PanelStatus[];
+  error?: string;
+  lastSeen?: string;
+}
+
 export interface SystemState {
-  // IR is one-way, so wall power and box channels are the last commanded values, not confirmed.
-  wallPower: "on" | "off" | "unknown";
+  walls: Record<string, WallState>;
+  // IR is one-way, so box channels are the last commanded values, not confirmed.
   boxes: Record<string, { channel?: number; lastCommandAt?: string }>;
   atlas: { connected: boolean; zones: Record<number, ZoneState> };
   videoWall: { activePreset?: string; reachable: boolean };
@@ -20,7 +29,7 @@ export interface SystemState {
 /** Holds live system state and emits "change" with the full state whenever it is patched. */
 export class StateStore extends EventEmitter {
   state: SystemState = {
-    wallPower: "unknown",
+    walls: {},
     boxes: {},
     atlas: { connected: false, zones: {} },
     videoWall: { reachable: false },

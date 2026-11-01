@@ -33,6 +33,7 @@ export async function buildServer({ cfg, state, devices, scenes, guide }: Deps) 
   app.get("/api/config", async () => ({
     site: cfg.site,
     simulate: cfg.simulate,
+    walls: cfg.endpoints.map(({ id, name }) => ({ id, name })),
     cableBoxes: cfg.cableBoxes.map(({ id, name, favorites, atlasSource }) => ({ id, name, favorites, atlasSource })),
     channels: cfg.channels,
     zones: cfg.atlas.zones,
@@ -46,10 +47,19 @@ export async function buildServer({ cfg, state, devices, scenes, guide }: Deps) 
 
   app.get("/api/state", async () => state.state);
 
-  // --- Video wall TVs (IR) ---
+  // --- Video wall TV panels (via each wall's endpoint agent) ---
+  // Omit `wall` for every wall; omit `panels` for every panel on the wall.
+  const WallTarget = z.object({ wall: z.string().optional(), panels: z.array(z.string()).optional() });
+
   app.post("/api/wall/power", async (req) => {
-    const { on } = z.object({ on: z.boolean() }).parse(req.body);
-    await devices.tvWall.power(on);
+    const { on, wall, panels } = WallTarget.extend({ on: z.boolean() }).parse(req.body);
+    await devices.tvWall.power(on, wall, panels);
+    return { ok: true };
+  });
+
+  app.post("/api/wall/input", async (req) => {
+    const { input, wall, panels } = WallTarget.extend({ input: z.string() }).parse(req.body);
+    await devices.tvWall.input(input, wall, panels);
     return { ok: true };
   });
 

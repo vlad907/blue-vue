@@ -1,0 +1,14 @@
+{
+  "name": "blue-vue-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Blue Vue wall endpoint agent: controls the panels and IR devices at one video wall PC",
+  "type": "module",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/agent.ts agent.json",
+    "test": "node --test test/*.test.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}

@@ -60,7 +60,8 @@ export class SceneRunner {
   private runStep(step: SceneStep): Promise<void> {
     const d = this.devices;
     switch (step.type) {
-      case "wallPower": return d.tvWall.power(step.on);
+      case "wallPower": return d.tvWall.power(step.on, step.wall);
+      case "wallInput": return d.tvWall.input(step.input, step.wall);
       case "wallPreset": return d.videoWall.recallPreset(step.preset);
       case "tune": return d.boxes.tune(step.box, step.channel);
       case "boxKey": return d.boxes.key(step.box, step.key);

@@ -2,7 +2,7 @@
 
 A touch-panel control system for:
 
-1. **Video wall TVs**: power on/off over IR through a USB IR blaster
+1. **Video wall TVs**: per-panel power and input control on every wall, through an agent on each wall's Windows PC ([agent/](agent/README.md))
 2. **Xfinity boxes**: channel tuning, favorites and a full remote over IR
 3. **TV guide**: Gracenote (TMS OnConnect) listings; tap a show to tune
 4. **AtlasIED Atmosphere DSP**: zone source, gain, mute and scenes over TCP JSON-RPC
@@ -24,15 +24,17 @@ Config is read from `config/system.local.json` if it exists (gitignored, for sit
 
 ## Hardware notes
 
-### IR (LIRC)
-Run the control box on Linux (a Raspberry Pi or a NUC) with LIRC installed. IR is sent with `irsend`.
+### Video walls and IR (wall agents)
+Each Windows video wall PC runs the **Blue Vue agent** (see [agent/README.md](agent/README.md)). The agent controls that wall's panels (TCL Roku TVs over the network, Google TVs over ADB, or IR as a fallback) and owns that wall's IR hardware for the Xfinity boxes. Add each wall under `endpoints`, and point each box's emitter at an endpoint and IR port:
 
-- **Each Xfinity box needs its own IR emitter.** Identical boxes respond to the same codes, so if one emitter can reach two boxes, both will change channel. Use one of these:
-  - a multi-output blaster such as the Iguanaworks USB IR transceiver, with each box on its own `transmitters` channel, or
-  - one blaster per box, each running its own `lircd` instance, and set `socket` on the emitter.
-- Put the IR codes in `/etc/lirc/lircd.conf.d/`. The remote names (`xfinity`, `wall_tv`) and button names (`KEY_0`, `KEY_OK`, `KEY_POWERON`, …) must match the config. You can learn codes with `irrecord`, or start from the LIRC remotes database. Xfinity XR11/XR15 remotes have to be in IR mode, not RF-paired.
-- For the TVs, use **discrete** power-on/power-off codes, not the power toggle. With a toggle, one panel that misses a code ends up out of sync with the rest of the wall.
-- IR is one-way, so the wall power state and box channels the UI shows are the last values commanded, not confirmed.
+```json
+"endpoints": [{ "id": "wall1", "name": "Main Bar", "url": "http://10.0.10.21:8090", "token": "..." }],
+"emitters":  { "box1": { "endpoint": "wall1", "port": 1 } }
+```
+
+- **Each Xfinity box needs its own IR port.** Identical boxes respond to the same codes, so if one emitter can reach two boxes, both will change channel.
+- The control server polls every wall's panels, so the UI shows real power state for network-controlled panels. Panels driven by IR show a dashed border, because their state is only the last command sent, not a confirmed reading.
+- An emitter without `endpoint` falls back to local LIRC (`socket`/`transmitters`) on a Linux control server.
 
 ### Atlas Atmosphere
 TCP port 5321, newline-delimited JSON-RPC 2.0. The client subscribes to `ZoneGain_N`, `ZoneMute_N` and `ZoneSource_N`, so changes made from wall panels or the Atmosphere web UI show up live. It reconnects automatically. You may need to enable third-party control in the Atmosphere UI. Zone and source indexes are 0-based.
@@ -53,7 +55,8 @@ Set `guide.lineupId` and paste `stationId`s into `channels`. If there is no key 
 | Method | Path | Body |
 |---|---|---|
 | GET | `/api/config`, `/api/state`, `/api/guide` | |
-| POST | `/api/wall/power` | `{ "on": true }` |
+| POST | `/api/wall/power` | `{ "on": true, "wall": "wall1", "panels": ["r1c1"] }` (wall and panels optional) |
+| POST | `/api/wall/input` | `{ "input": "hdmi1", "wall": "wall1" }` |
 | POST | `/api/wall/preset/:id` | |
 | POST | `/api/boxes/:id/tune` | `{ "channel": 206 }` |
 | POST | `/api/boxes/:id/key` | `{ "key": "KEY_CHANNELUP" }` |
@@ -62,4 +65,4 @@ Set `guide.lineupId` and paste `stationId`s into `channels`. If there is no key 
 | POST | `/api/scenes/:id` | |
 | WS | `/ws` | pushes `{ type: "state", state }` on every change |
 
-Scene step types: `wallPower`, `wallPreset`, `tune`, `boxKey`, `zoneSource`, `zoneGain`, `zoneMute`, `atlasScene`, `delay`.
+Scene step types: `wallPower` (optional `wall`), `wallInput`, `wallPreset`, `tune`, `boxKey`, `zoneSource`, `zoneGain`, `zoneMute`, `atlasScene`, `delay`.

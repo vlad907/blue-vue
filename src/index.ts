@@ -2,6 +2,7 @@ import { loadConfig } from "./config.ts";
 import { CableBoxController } from "./devices/cableBox.ts";
 import { TvWallController } from "./devices/tvWall.ts";
 import { createAtlas } from "./drivers/atlas.ts";
+import { EndpointManager } from "./drivers/endpoints.ts";
 import { IrQueue, createTransmitter } from "./drivers/ir/transmitter.ts";
 import { createVideoWall } from "./drivers/videoWall.ts";
 import { GracenoteGuide } from "./guide/gracenote.ts";
@@ -13,16 +14,18 @@ const cfg = loadConfig(process.argv[2]);
 const state = new StateStore();
 state.setMaxListeners(100); // one listener per connected panel
 
-const ir = new IrQueue(createTransmitter(cfg), cfg.ir.commandGapMs);
+const endpoints = new EndpointManager(cfg, state);
+const ir = new IrQueue(createTransmitter(cfg, endpoints), cfg.ir.commandGapMs);
 const devices = {
   boxes: new CableBoxController(cfg, ir, state),
-  tvWall: new TvWallController(cfg, ir, state),
+  tvWall: new TvWallController(endpoints),
   atlas: createAtlas(cfg, state),
   videoWall: createVideoWall(cfg, state),
 };
 const scenes = new SceneRunner(cfg, devices, state);
 const guide = new GracenoteGuide(cfg, state);
 
+endpoints.start();
 devices.atlas.start();
 guide.start();
 
@@ -32,6 +35,7 @@ console.log(`[server] ${cfg.site} control panel at http://localhost:${cfg.server
 
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, async () => {
+    endpoints.stop();
     devices.atlas.stop();
     guide.stop();
     await app.close();

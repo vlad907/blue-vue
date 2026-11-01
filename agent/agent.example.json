@@ -1,0 +1,34 @@
+{
+  "name": "wall1",
+  "port": 8090,
+  "token": "CHANGE-ME-to-a-long-random-string",
+  "simulate": false,
+  "staggerMs": 250,
+  "pollSeconds": 15,
+
+  "ir": {
+    "driver": "globalcache",
+    "host": "10.0.10.31",
+    "module": 1
+  },
+
+  "codes": {
+    "tcl": {
+      "KEY_POWERON": "PASTE PRONTO HEX FROM GLOBAL CACHE CONTROL TOWER OR iLEARN",
+      "KEY_POWEROFF": "PASTE PRONTO HEX",
+      "KEY_HDMI1": "PASTE PRONTO HEX"
+    },
+    "xfinity": {
+      "KEY_0": "PASTE PRONTO HEX",
+      "KEY_1": "PASTE PRONTO HEX",
+      "KEY_OK": "PASTE PRONTO HEX"
+    }
+  },
+
+  "panels": [
+    { "id": "r1c1", "name": "Top Left", "driver": "roku", "host": "10.0.10.101", "input": "hdmi1" },
+    { "id": "r1c2", "name": "Top Right", "driver": "roku", "host": "10.0.10.102", "input": "hdmi1" },
+    { "id": "r2c1", "name": "Bottom Left", "driver": "roku", "host": "10.0.10.103", "input": "hdmi1" },
+    { "id": "r2c2", "name": "Bottom Right", "driver": "roku", "host": "10.0.10.104", "input": "hdmi1" }
+  ]
+}

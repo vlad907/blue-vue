@@ -3,12 +3,23 @@ import { resolve } from "node:path";
 import { z } from "zod";
 
 // An emitter is one physical IR output. Identical Xfinity boxes respond to the
-// same codes, so each box needs its own emitter: either a transmitter channel on
-// a multi-output blaster (LIRC SET_TRANSMITTERS) or a separate blaster with its
-// own lircd socket.
+// same codes, so each box needs its own emitter. An emitter is either a port on
+// a wall endpoint's IR hardware (`endpoint` + `port`), or a local LIRC output
+// (`socket` and/or `transmitters`).
 const Emitter = z.object({
+  endpoint: z.string().optional(),
+  port: z.number().int().positive().optional(),
   socket: z.string().optional(),
   transmitters: z.array(z.number().int().positive()).optional(),
+});
+
+// A Windows video wall PC running the Blue Vue agent (agent/).
+const Endpoint = z.object({
+  id: z.string(),
+  name: z.string(),
+  url: z.string().url(),
+  token: z.string().optional(),
+  tokenEnv: z.string().optional(),
 });
 
 const Channel = z.object({
@@ -32,7 +43,8 @@ const CableBox = z.object({
 });
 
 const SceneStep = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("wallPower"), on: z.boolean() }),
+  z.object({ type: z.literal("wallPower"), on: z.boolean(), wall: z.string().optional() }),
+  z.object({ type: z.literal("wallInput"), input: z.string(), wall: z.string().optional() }),
   z.object({ type: z.literal("wallPreset"), preset: z.string() }),
   z.object({ type: z.literal("tune"), box: z.string(), channel: z.number().int().positive() }),
   z.object({ type: z.literal("boxKey"), box: z.string(), key: z.string() }),
@@ -65,14 +77,8 @@ export const ConfigSchema = z.object({
   }).default({}),
   emitters: z.record(Emitter),
 
-  videoWallTvs: z.object({
-    remote: z.string(),
-    emitters: z.array(z.string()),
-    powerOnKey: z.string().default("KEY_POWERON"),
-    powerOffKey: z.string().default("KEY_POWEROFF"),
-    repeat: z.number().int().min(1).default(2),
-    staggerMs: z.number().int().default(300),
-  }),
+  endpoints: z.array(Endpoint).default([]),
+  endpointPollSeconds: z.number().int().min(2).default(10),
 
   cableBoxes: z.array(CableBox),
   channels: z.array(Channel),
@@ -131,9 +137,16 @@ function validateRefs(cfg: Config) {
   const emitters = new Set(Object.keys(cfg.emitters));
   const boxes = new Set(cfg.cableBoxes.map((b) => b.id));
   const presets = new Set(cfg.videoWall.presets.map((p) => p.id));
+  const endpoints = new Set(cfg.endpoints.map((e) => e.id));
 
-  for (const e of cfg.videoWallTvs.emitters) if (!emitters.has(e)) errors.push(`videoWallTvs: unknown emitter "${e}"`);
   for (const b of cfg.cableBoxes) if (!emitters.has(b.emitter)) errors.push(`box ${b.id}: unknown emitter "${b.emitter}"`);
+  for (const [name, e] of Object.entries(cfg.emitters)) {
+    if (e.endpoint && !endpoints.has(e.endpoint)) errors.push(`emitter ${name}: unknown endpoint "${e.endpoint}"`);
+    if (e.endpoint && !e.port) errors.push(`emitter ${name}: port is required with endpoint`);
+  }
+  for (const e of cfg.endpoints) {
+    if (!cfg.simulate && !e.token && !(e.tokenEnv && process.env[e.tokenEnv])) errors.push(`endpoint ${e.id}: no token (set token or tokenEnv)`);
+  }
 
   const boxEmitters = cfg.cableBoxes.map((b) => b.emitter);
   if (new Set(boxEmitters).size !== boxEmitters.length) {
@@ -144,6 +157,7 @@ function validateRefs(cfg: Config) {
     for (const step of s.steps) {
       if ((step.type === "tune" || step.type === "boxKey") && !boxes.has(step.box)) errors.push(`scene ${s.id}: unknown box "${step.box}"`);
       if (step.type === "wallPreset" && !presets.has(step.preset)) errors.push(`scene ${s.id}: unknown wall preset "${step.preset}"`);
+      if ((step.type === "wallPower" || step.type === "wallInput") && step.wall && !endpoints.has(step.wall)) errors.push(`scene ${s.id}: unknown wall "${step.wall}"`);
     }
   }
   if (errors.length) throw new Error("Config errors:\n  " + errors.join("\n  "));

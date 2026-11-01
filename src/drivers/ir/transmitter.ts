@@ -1,11 +1,14 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { Config } from "../../config.ts";
+import type { EndpointManager } from "../endpoints.ts";
 
 const execFileAsync = promisify(execFile);
 export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export interface Emitter {
+  endpoint?: string;
+  port?: number;
   socket?: string;
   transmitters?: number[];
 }
@@ -65,7 +68,17 @@ export class IrQueue {
   }
 }
 
-export function createTransmitter(cfg: Config): IrTransmitter {
-  if (cfg.simulate || cfg.ir.driver === "simulated") return new SimulatedTransmitter();
-  return new LircTransmitter(cfg.ir.irsendPath, cfg.ir.defaultSocket);
+/** Sends through a wall endpoint's IR hardware when the emitter names one, otherwise locally. */
+export class RoutingTransmitter implements IrTransmitter {
+  constructor(private local: IrTransmitter, private endpoints: EndpointManager) {}
+
+  send(emitter: Emitter, remote: string, key: string) {
+    if (emitter.endpoint) return this.endpoints.get(emitter.endpoint).irSend(emitter.port!, remote, key);
+    return this.local.send(emitter, remote, key);
+  }
+}
+
+export function createTransmitter(cfg: Config, endpoints: EndpointManager): IrTransmitter {
+  const local = cfg.simulate || cfg.ir.driver === "simulated" ? new SimulatedTransmitter() : new LircTransmitter(cfg.ir.irsendPath, cfg.ir.defaultSocket);
+  return new RoutingTransmitter(local, endpoints);
 }
