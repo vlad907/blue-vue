@@ -118,6 +118,9 @@ main { flex: 1; overflow-y: auto; padding: 16px 20px 40px; }
 .wall .err { color: #fca5a5; font-size: 12px; margin: 4px 0 0; word-break: break-word; }
 .wall .row { margin-top: 12px; }
 .wall .row .btn { flex: 1; min-width: 0; padding: 12px; }
+.apps { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.app { display: flex; align-items: center; gap: 6px; }
+.app .mute { padding: 4px 10px; font-size: 13px; }
 .panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 6px; margin-top: 12px; }
 .panel {
   aspect-ratio: 16 / 9; border-radius: 6px; border: 1px solid var(--line); background: #070b14; color: var(--muted);

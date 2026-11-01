@@ -3,3 +3,5 @@ node_modules/
 config/system.local.json
 data/
 .DS_Store
+logs/
+run-server.cmd

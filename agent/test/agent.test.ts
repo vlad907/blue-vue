@@ -15,6 +15,7 @@ const config = (overrides: Partial<AgentConfig> = {}): AgentConfig => ({
   ir: { driver: "simulated" },
   codes: { tcl: { KEY_POWERON: PRONTO, KEY_POWEROFF: PRONTO }, xfinity: { KEY_5: PRONTO } },
   panels: [],
+  apps: [],
   ...overrides,
 });
 
@@ -113,4 +114,31 @@ test("HTTP API requires the token and drives panels and IR", async () => {
   } finally {
     agent.stop();
   }
+});
+
+test("app watcher restarts stopped software, but not more than once per gap", async () => {
+  const { AppWatcher, SimulatedProcessControl } = await import("../src/apps.ts");
+  const cfg = config({ apps: [{ name: "Mosaic", process: "Mosaic.exe", task: "BlueVueMosaic", autoRestart: true }] });
+  const proc = new SimulatedProcessControl(cfg.apps);
+  const starts: string[] = [];
+  const realStart = proc.start.bind(proc);
+  proc.start = async (task: string) => { starts.push(task); await realStart(task); };
+  const watcher = new AppWatcher(cfg, proc);
+
+  await watcher.check();
+  assert.deepEqual(starts, []);
+  assert.equal(watcher.list()[0].running, true);
+
+  proc.running.clear(); // the app crashed
+  await watcher.check();
+  assert.deepEqual(starts, ["BlueVueMosaic"]);
+
+  proc.running.clear(); // crashed again right away: wait out the gap
+  await watcher.check();
+  assert.deepEqual(starts, ["BlueVueMosaic"]);
+  assert.equal(watcher.list()[0].running, false);
+
+  watcher.minRestartGapMs = 0;
+  await watcher.check();
+  assert.deepEqual(starts, ["BlueVueMosaic", "BlueVueMosaic"]);
 });

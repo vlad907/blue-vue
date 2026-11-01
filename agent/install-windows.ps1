@@ -1,9 +1,12 @@
 # Installs the Blue Vue agent as a startup task on a video wall PC.
 # Run in an elevated PowerShell from the agent folder:
-#   powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -ControlServer 10.0.10.5
+#   powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -ControlServer 10.0.10.5 `
+#       -MosaicExe "C:\Program Files\Mosaic\MosaicWall.exe"
 param(
     [Parameter(Mandatory = $true)][string]$ControlServer,   # IP allowed to reach the agent
     [int]$Port = 8090,
+    [string]$MosaicExe,          # optional: video wall software to launch at logon and keep running
+    [string]$WallUser = "$env:USERDOMAIN\$env:USERNAME",
     [string]$TaskName = "BlueVueAgent"
 )
 $ErrorActionPreference = "Stop"
@@ -57,6 +60,22 @@ Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Se
 Get-NetFirewallRule -DisplayName "Blue Vue Agent" -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 New-NetFirewallRule -DisplayName "Blue Vue Agent" -Direction Inbound -Protocol TCP -LocalPort $Port `
     -RemoteAddress $ControlServer -Action Allow | Out-Null
+
+# The agent runs as SYSTEM, which can't show windows on the wall. This task
+# launches the video wall software in the wall user's desktop session at logon,
+# and the agent re-runs it (schtasks /Run) whenever the software stops.
+if ($MosaicExe) {
+    if (-not (Test-Path $MosaicExe)) { throw "MosaicExe not found: $MosaicExe" }
+    $appAction = New-ScheduledTaskAction -Execute $MosaicExe -WorkingDirectory (Split-Path $MosaicExe)
+    $appTrigger = New-ScheduledTaskTrigger -AtLogOn -User $WallUser
+    $appPrincipal = New-ScheduledTaskPrincipal -UserId $WallUser -LogonType Interactive -RunLevel Limited
+    $appSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+        -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -MultipleInstances IgnoreNew
+    Register-ScheduledTask -TaskName "BlueVueMosaic" -Action $appAction -Trigger $appTrigger `
+        -Principal $appPrincipal -Settings $appSettings -Force | Out-Null
+    Write-Host "Registered BlueVueMosaic to launch $(Split-Path $MosaicExe -Leaf) as $WallUser at logon."
+    Write-Host "Set the wall PC to sign in to $WallUser automatically (netplwiz) so it comes back after a reboot." -ForegroundColor Yellow
+}
 
 Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 Start-ScheduledTask -TaskName $TaskName

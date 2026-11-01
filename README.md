@@ -18,6 +18,12 @@ BLUEVUE_SIMULATE=1 npm run dev     # no hardware needed
 npm start                          # real hardware
 ```
 
+**Install on the Windows control PC** (elevated PowerShell, from the project folder):
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
+```
+The first run creates `config\system.local.json` and a `.env` file for secrets (the Gracenote key and the wall tokens). Fill them in and run the script again. The second run sets the server to start at boot, restarts it if it exits, and opens port 8080 to the local network. Logs go to `logs\server.log`.
+
 Open `http://<control-box-ip>:8080` on any tablet on the LAN. On an iPad, use "Add to Home Screen" so it runs full-screen.
 
 Config is read from `config/system.local.json` if it exists (gitignored, for site-specific settings), otherwise from `config/system.json`.
@@ -57,6 +63,7 @@ Set `guide.lineupId` and paste `stationId`s into `channels`. If there is no key 
 | GET | `/api/config`, `/api/state`, `/api/guide` | |
 | POST | `/api/wall/power` | `{ "on": true, "wall": "wall1", "panels": ["r1c1"] }` (wall and panels optional) |
 | POST | `/api/wall/input` | `{ "input": "hdmi1", "wall": "wall1" }` |
+| POST | `/api/walls/:wall/apps/:name/restart` | |
 | POST | `/api/wall/preset/:id` | |
 | POST | `/api/boxes/:id/tune` | `{ "channel": 206 }` |
 | POST | `/api/boxes/:id/key` | `{ "key": "KEY_CHANNELUP" }` |

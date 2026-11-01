@@ -10,6 +10,11 @@ import { SceneRunner } from "./scenes.ts";
 import { buildServer } from "./server.ts";
 import { StateStore } from "./state.ts";
 
+// Secrets (GRACENOTE_API_KEY, wall tokens) can live in a .env file next to package.json.
+try {
+  process.loadEnvFile();
+} catch {}
+
 const cfg = loadConfig(process.argv[2]);
 const state = new StateStore();
 state.setMaxListeners(100); // one listener per connected panel
@@ -29,7 +34,7 @@ endpoints.start();
 devices.atlas.start();
 guide.start();
 
-const app = await buildServer({ cfg, state, devices, scenes, guide });
+const app = await buildServer({ cfg, state, devices, scenes, guide, endpoints });
 await app.listen({ host: cfg.server.host, port: cfg.server.port });
 console.log(`[server] ${cfg.site} control panel at http://localhost:${cfg.server.port}`);
 

@@ -13,6 +13,21 @@ export interface PanelStatus {
   error?: string;
 }
 
+export interface AppStatus {
+  name: string;
+  running: boolean | null;
+  autoRestart: boolean;
+  lastRestartAt?: string;
+  error?: string;
+}
+
+export interface EndpointStatus {
+  panels: PanelStatus[];
+  apps?: AppStatus[];
+  host?: string;
+  uptimeSec?: number;
+}
+
 export interface CommandResult {
   ok: boolean;
   errors: Record<string, string>;
@@ -20,10 +35,11 @@ export interface CommandResult {
 
 /** One video wall PC running the Blue Vue agent. See agent/README.md for its API. */
 export interface Endpoint {
-  status(): Promise<{ panels: PanelStatus[] }>;
+  status(): Promise<EndpointStatus>;
   power(on: boolean, panels?: string[]): Promise<CommandResult>;
   input(input: string, panels?: string[]): Promise<CommandResult>;
   irSend(port: number, remote: string, key: string): Promise<void>;
+  restartApp(name: string): Promise<void>;
 }
 
 export class HttpEndpoint implements Endpoint {
@@ -54,11 +70,15 @@ export class HttpEndpoint implements Endpoint {
   async irSend(port: number, remote: string, key: string) {
     await this.call("/ir/send", { port, remote, key });
   }
+  async restartApp(name: string) {
+    await this.call(`/apps/${encodeURIComponent(name)}/restart`, {}, 15_000);
+  }
 }
 
 /** In-process stand-in for an agent with a 2x2 wall of panels. */
 export class SimulatedEndpoint implements Endpoint {
   panels: PanelStatus[];
+  apps: AppStatus[] = [{ name: "Mosaic", running: true, autoRestart: true }];
 
   constructor(private id: string) {
     this.panels = ["r1c1", "r1c2", "r2c1", "r2c2"].map((pid) => ({
@@ -67,7 +87,7 @@ export class SimulatedEndpoint implements Endpoint {
   }
 
   async status() {
-    return { panels: this.panels.map((p) => ({ ...p })) };
+    return { panels: this.panels.map((p) => ({ ...p })), apps: this.apps.map((a) => ({ ...a })), host: `${this.id.toUpperCase()}-PC` };
   }
   async power(on: boolean, ids?: string[]) {
     for (const p of this.panels) if (!ids?.length || ids.includes(p.id)) p.power = on ? "on" : "off";
@@ -80,6 +100,13 @@ export class SimulatedEndpoint implements Endpoint {
   }
   async irSend(port: number, remote: string, key: string) {
     console.log(`[endpoint:sim] ${this.id} ir port ${port}: ${remote} ${key}`);
+  }
+  async restartApp(name: string) {
+    const app = this.apps.find((a) => a.name === name);
+    if (!app) throw new Error(`Unknown app "${name}"`);
+    app.running = true;
+    app.lastRestartAt = new Date().toISOString();
+    console.log(`[endpoint:sim] ${this.id} restart ${name}`);
   }
 }
 
@@ -113,9 +140,9 @@ export class EndpointManager {
 
   async poll(id: string) {
     try {
-      const { panels } = await this.get(id).status();
+      const { panels, apps = [], host } = await this.get(id).status();
       this.state.update((s) => {
-        s.walls[id] = { ...s.walls[id], online: true, panels, error: undefined, lastSeen: new Date().toISOString() };
+        s.walls[id] = { ...s.walls[id], online: true, panels, apps, host, error: undefined, lastSeen: new Date().toISOString() };
       });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);

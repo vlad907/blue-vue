@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import type { PanelStatus } from "./drivers/endpoints.ts";
+import type { AppStatus, PanelStatus } from "./drivers/endpoints.ts";
 
 export interface ZoneState {
   gainDb?: number;
@@ -11,6 +11,8 @@ export interface WallState {
   name: string;
   online: boolean;
   panels: PanelStatus[];
+  apps?: AppStatus[];
+  host?: string;
   error?: string;
   lastSeen?: string;
 }

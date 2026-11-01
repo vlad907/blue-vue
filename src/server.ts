@@ -6,6 +6,7 @@ import fastifyWebsocket from "@fastify/websocket";
 import { z } from "zod";
 import type { Config } from "./config.ts";
 import { REMOTE_KEYS } from "./devices/cableBox.ts";
+import type { EndpointManager } from "./drivers/endpoints.ts";
 import type { GracenoteGuide } from "./guide/gracenote.ts";
 import type { Devices, SceneRunner } from "./scenes.ts";
 import type { StateStore } from "./state.ts";
@@ -16,9 +17,10 @@ interface Deps {
   devices: Devices;
   scenes: SceneRunner;
   guide: GracenoteGuide;
+  endpoints: EndpointManager;
 }
 
-export async function buildServer({ cfg, state, devices, scenes, guide }: Deps) {
+export async function buildServer({ cfg, state, devices, scenes, guide, endpoints }: Deps) {
   const app = Fastify({ logger: { level: "warn" } });
   await app.register(fastifyWebsocket);
   await app.register(fastifyStatic, { root: join(dirname(fileURLToPath(import.meta.url)), "..", "web") });
@@ -60,6 +62,13 @@ export async function buildServer({ cfg, state, devices, scenes, guide }: Deps) 
   app.post("/api/wall/input", async (req) => {
     const { input, wall, panels } = WallTarget.extend({ input: z.string() }).parse(req.body);
     await devices.tvWall.input(input, wall, panels);
+    return { ok: true };
+  });
+
+  app.post("/api/walls/:wall/apps/:name/restart", async (req) => {
+    const { wall, name } = z.object({ wall: z.string(), name: z.string() }).parse(req.params);
+    await endpoints.get(wall).restartApp(name);
+    await endpoints.poll(wall);
     return { ok: true };
   });
 

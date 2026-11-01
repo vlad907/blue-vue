@@ -2,6 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { timingSafeEqual } from "node:crypto";
 import { hostname } from "node:os";
 import { resolve } from "node:path";
+import { AppWatcher, SimulatedProcessControl, windowsProcessControl } from "./apps.ts";
+import { COMMANDS, runCli } from "./cli.ts";
 import { type AgentConfig, loadConfig } from "./config.ts";
 import { IrService, createTransmitter } from "./ir.ts";
 import { log } from "./log.ts";
@@ -48,6 +50,7 @@ const panelIds = (v: unknown, cfg: AgentConfig): string[] | undefined => {
 export function createAgent(cfg: AgentConfig) {
   const ir = new IrService(createTransmitter(cfg.ir, cfg.simulate), cfg.codes);
   const panels = new PanelManager(cfg, ir);
+  const apps = new AppWatcher(cfg, cfg.simulate ? new SimulatedProcessControl(cfg.apps) : windowsProcessControl);
   const startedAt = Date.now();
 
   async function route(req: IncomingMessage, url: URL) {
@@ -59,6 +62,7 @@ export function createAgent(cfg: AgentConfig) {
         name: cfg.name, host: hostname(), version: VERSION, simulate: cfg.simulate,
         uptimeSec: Math.round((Date.now() - startedAt) / 1000),
         panels: panels.list(),
+        apps: apps.list(),
         irRemotes: Object.keys(cfg.codes),
       };
     }
@@ -90,6 +94,14 @@ export function createAgent(cfg: AgentConfig) {
       return { ok: true };
     }
 
+    const restart = /^\/apps\/([^/]+)\/restart$/.exec(path);
+    if (method === "POST" && restart) {
+      const name = decodeURIComponent(restart[1]);
+      if (!cfg.apps.some((a) => a.name === name)) throw new HttpError(404, `Unknown app "${name}"`);
+      await apps.restart(name);
+      return { ok: true };
+    }
+
     throw new HttpError(404, "Not found");
   }
 
@@ -116,15 +128,18 @@ export function createAgent(cfg: AgentConfig) {
   return {
     server,
     panels,
+    apps,
     ir,
     start(port = cfg.port) {
       panels.start();
+      apps.start();
       return new Promise<number>((r) =>
         server.listen(port, () => r((server.address() as { port: number }).port)),
       );
     },
     stop() {
       panels.stop();
+      apps.stop();
       server.close();
     },
   };
@@ -135,6 +150,17 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
     try {
       const cfg = loadConfig(resolve(process.argv[3] ?? "agent.json"));
       console.log(`Config OK: ${cfg.name}, ${cfg.panels.length} panels`);
+      process.exit(0);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  }
+  if (COMMANDS.includes(process.argv[2])) {
+    const configIdx = process.argv.indexOf("--config");
+    const configPath = resolve(configIdx > 0 ? process.argv.splice(configIdx, 2)[1] : "agent.json");
+    try {
+      await runCli(process.argv.slice(2), configPath);
       process.exit(0);
     } catch (err) {
       console.error(err instanceof Error ? err.message : err);

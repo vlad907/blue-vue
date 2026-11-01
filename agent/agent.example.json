@@ -25,6 +25,10 @@
     }
   },
 
+  "apps": [
+    { "name": "Mosaic", "process": "MosaicWall.exe", "task": "BlueVueMosaic", "autoRestart": true }
+  ],
+
   "panels": [
     { "id": "r1c1", "name": "Top Left", "driver": "roku", "host": "10.0.10.101", "input": "hdmi1" },
     { "id": "r1c2", "name": "Top Right", "driver": "roku", "host": "10.0.10.102", "input": "hdmi1" },

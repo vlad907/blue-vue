@@ -87,6 +87,17 @@ function renderWalls() {
         el("h3", {}, w.name,
           el("span", { class: `pill ${ws.online ? "ok" : "bad"}` }, ws.online ? `${onCount}/${ws.panels.length} on` : "offline")),
         ws.error ? el("p", { class: "err" }, ws.error) : null,
+        ws.online && ws.apps?.length
+          ? el("div", { class: "apps" },
+              ...ws.apps.map((a) =>
+                el("span", { class: "app" },
+                  el("span", { class: `pill ${a.running ? "ok" : a.running === false ? "bad" : ""}`, title: a.error ?? "" },
+                    `${a.name}: ${a.running ? "running" : a.running === false ? "stopped" : "?"}`),
+                  el("button", {
+                    class: "mute",
+                    onclick: () => act(() => api(`/api/walls/${w.id}/apps/${encodeURIComponent(a.name)}/restart`, {}), `Restarting ${a.name} on ${w.name}`),
+                  }, "Restart"))))
+          : null,
         el("div", { class: "panels" },
           ...ws.panels.map((p) =>
             el("button", {

@@ -12,6 +12,13 @@ export interface PanelConfig {
   input?: string; // input to select after power-on, e.g. "hdmi1"
 }
 
+export interface AppConfig {
+  name: string; // shown in the control panel, e.g. "Mosaic"
+  process: string; // image name, e.g. "MosaicWall.exe"
+  task: string; // scheduled task that launches it as the wall user
+  autoRestart: boolean;
+}
+
 export interface IrConfig {
   driver: "globalcache" | "command" | "simulated";
   host?: string; // globalcache
@@ -31,6 +38,7 @@ export interface AgentConfig {
   // Pronto hex codes: codes[remote][key] = "0000 006D ..."
   codes: Record<string, Record<string, string>>;
   panels: PanelConfig[];
+  apps: AppConfig[];
 }
 
 export function loadConfig(path: string): AgentConfig {
@@ -45,6 +53,7 @@ export function loadConfig(path: string): AgentConfig {
     ir: raw.ir ?? { driver: "simulated" },
     codes: raw.codes ?? {},
     panels: raw.panels ?? [],
+    apps: (raw.apps ?? []).map((a: any) => ({ task: "BlueVueMosaic", autoRestart: true, ...a })),
   };
   if (process.env.BLUEVUE_SIMULATE === "1") cfg.simulate = true;
 
@@ -65,6 +74,9 @@ export function loadConfig(path: string): AgentConfig {
       if (!p.port) errors.push(`panel ${p.id}: port is required`);
       if (!p.remote || !cfg.codes[p.remote]) errors.push(`panel ${p.id}: remote "${p.remote}" not found in codes`);
     }
+  }
+  for (const a of cfg.apps) {
+    if (!a.name || !a.process) errors.push("each app needs name and process");
   }
   if (errors.length) throw new Error("Agent config errors:\n  " + errors.join("\n  "));
   return cfg;
