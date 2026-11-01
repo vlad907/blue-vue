@@ -1,0 +1,126 @@
+{
+  "site": "Blue Vue",
+  "server": { "port": 8080 },
+  "simulate": true,
+
+  "ir": {
+    "driver": "lirc",
+    "interDigitDelayMs": 350,
+    "commandGapMs": 120
+  },
+
+  "emitters": {
+    "wall": { "transmitters": [1] },
+    "box1": { "transmitters": [2] },
+    "box2": { "transmitters": [3] },
+    "box3": { "transmitters": [4] }
+  },
+
+  "videoWallTvs": {
+    "remote": "wall_tv",
+    "emitters": ["wall"],
+    "powerOnKey": "KEY_POWERON",
+    "powerOffKey": "KEY_POWEROFF",
+    "repeat": 2,
+    "staggerMs": 300
+  },
+
+  "cableBoxes": [
+    { "id": "box1", "name": "Box 1", "remote": "xfinity", "emitter": "box1", "atlasSource": 0, "favorites": [206, 209, 202, 1206] },
+    { "id": "box2", "name": "Box 2", "remote": "xfinity", "emitter": "box2", "atlasSource": 1, "favorites": [206, 209, 225, 241] },
+    { "id": "box3", "name": "Box 3", "remote": "xfinity", "emitter": "box3", "atlasSource": 2, "favorites": [202, 241, 245, 254] }
+  ],
+
+  "channels": [
+    { "number": 202, "name": "CNN", "category": "News" },
+    { "number": 206, "name": "ESPN", "category": "Sports" },
+    { "number": 209, "name": "ESPN2", "category": "Sports" },
+    { "number": 225, "name": "NFL Network", "category": "Sports" },
+    { "number": 241, "name": "FS1", "category": "Sports" },
+    { "number": 245, "name": "Golf", "category": "Sports" },
+    { "number": 254, "name": "TNT", "category": "Entertainment" },
+    { "number": 1206, "name": "ESPN HD", "category": "Sports" }
+  ],
+
+  "atlas": {
+    "enabled": true,
+    "host": "192.168.1.50",
+    "port": 5321,
+    "zones": [
+      { "index": 0, "name": "Main Room" },
+      { "index": 1, "name": "Bar" },
+      { "index": 2, "name": "Patio" }
+    ],
+    "sources": [
+      { "index": 0, "name": "Box 1" },
+      { "index": 1, "name": "Box 2" },
+      { "index": 2, "name": "Box 3" },
+      { "index": 3, "name": "Background Music" }
+    ],
+    "scenes": [
+      { "index": 0, "name": "Default" },
+      { "index": 1, "name": "Game Day" }
+    ]
+  },
+
+  "videoWall": {
+    "driver": "simulated",
+    "baseUrl": "http://192.168.1.60",
+    "recallPath": "/presets/{id}/recall",
+    "method": "POST",
+    "presets": [
+      { "id": "full", "name": "Full Wall", "layout": "1x1" },
+      { "id": "split", "name": "Side by Side", "layout": "2x1" },
+      { "id": "quad", "name": "Quad", "layout": "2x2" },
+      { "id": "main-plus-2", "name": "Main + 2", "layout": "1+2" }
+    ]
+  },
+
+  "guide": {
+    "enabled": true,
+    "apiKeyEnv": "GRACENOTE_API_KEY",
+    "lineupId": "",
+    "hours": 6,
+    "refreshMinutes": 30
+  },
+
+  "scenes": [
+    {
+      "id": "open",
+      "name": "Open Venue",
+      "description": "Wall on, full layout, ESPN on Box 1, house audio",
+      "steps": [
+        { "type": "wallPower", "on": true },
+        { "type": "delay", "ms": 8000 },
+        { "type": "wallPreset", "preset": "full" },
+        { "type": "tune", "box": "box1", "channel": 206 },
+        { "type": "zoneSource", "zone": 0, "source": 0 },
+        { "type": "zoneGain", "zone": 0, "db": -25 },
+        { "type": "zoneMute", "zone": 0, "mute": false }
+      ]
+    },
+    {
+      "id": "gameday",
+      "name": "Game Day",
+      "description": "Quad layout across three sports channels",
+      "steps": [
+        { "type": "wallPreset", "preset": "quad" },
+        { "type": "tune", "box": "box1", "channel": 206 },
+        { "type": "tune", "box": "box2", "channel": 225 },
+        { "type": "tune", "box": "box3", "channel": 241 },
+        { "type": "atlasScene", "scene": 1 }
+      ]
+    },
+    {
+      "id": "close",
+      "name": "Close Venue",
+      "description": "Mute all zones and power off the wall",
+      "steps": [
+        { "type": "zoneMute", "zone": 0, "mute": true },
+        { "type": "zoneMute", "zone": 1, "mute": true },
+        { "type": "zoneMute", "zone": 2, "mute": true },
+        { "type": "wallPower", "on": false }
+      ]
+    }
+  ]
+}

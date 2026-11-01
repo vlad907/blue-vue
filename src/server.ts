@@ -1,0 +1,118 @@
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import Fastify from "fastify";
+import fastifyStatic from "@fastify/static";
+import fastifyWebsocket from "@fastify/websocket";
+import { z } from "zod";
+import type { Config } from "./config.ts";
+import { REMOTE_KEYS } from "./devices/cableBox.ts";
+import type { GracenoteGuide } from "./guide/gracenote.ts";
+import type { Devices, SceneRunner } from "./scenes.ts";
+import type { StateStore } from "./state.ts";
+
+interface Deps {
+  cfg: Config;
+  state: StateStore;
+  devices: Devices;
+  scenes: SceneRunner;
+  guide: GracenoteGuide;
+}
+
+export async function buildServer({ cfg, state, devices, scenes, guide }: Deps) {
+  const app = Fastify({ logger: { level: "warn" } });
+  await app.register(fastifyWebsocket);
+  await app.register(fastifyStatic, { root: join(dirname(fileURLToPath(import.meta.url)), "..", "web") });
+
+  app.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
+    const status = err instanceof z.ZodError ? 400 : (err.statusCode ?? 500);
+    const message = err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") : err.message;
+    reply.status(status).send({ error: message });
+  });
+
+  // Static system description for building the UI.
+  app.get("/api/config", async () => ({
+    site: cfg.site,
+    simulate: cfg.simulate,
+    cableBoxes: cfg.cableBoxes.map(({ id, name, favorites, atlasSource }) => ({ id, name, favorites, atlasSource })),
+    channels: cfg.channels,
+    zones: cfg.atlas.zones,
+    sources: cfg.atlas.sources,
+    atlasScenes: cfg.atlas.scenes,
+    gainRange: { min: cfg.atlas.minGainDb, max: cfg.atlas.maxGainDb },
+    wallPresets: cfg.videoWall.presets,
+    scenes: cfg.scenes.map(({ id, name, description }) => ({ id, name, description })),
+    remoteKeys: REMOTE_KEYS,
+  }));
+
+  app.get("/api/state", async () => state.state);
+
+  // --- Video wall TVs (IR) ---
+  app.post("/api/wall/power", async (req) => {
+    const { on } = z.object({ on: z.boolean() }).parse(req.body);
+    await devices.tvWall.power(on);
+    return { ok: true };
+  });
+
+  // --- Video wall processor presets (API) ---
+  app.post("/api/wall/preset/:id", async (req) => {
+    const { id } = z.object({ id: z.string() }).parse(req.params);
+    await devices.videoWall.recallPreset(id);
+    return { ok: true };
+  });
+
+  // --- Cable boxes (IR) ---
+  app.post("/api/boxes/:id/tune", async (req) => {
+    const { id } = z.object({ id: z.string() }).parse(req.params);
+    const { channel } = z.object({ channel: z.number().int().positive() }).parse(req.body);
+    await devices.boxes.tune(id, channel);
+    return { ok: true };
+  });
+
+  app.post("/api/boxes/:id/key", async (req) => {
+    const { id } = z.object({ id: z.string() }).parse(req.params);
+    const { key } = z.object({ key: z.string() }).parse(req.body);
+    await devices.boxes.key(id, key);
+    return { ok: true };
+  });
+
+  // --- Atlas DSP ---
+  app.post("/api/audio/zones/:zone", async (req) => {
+    const { zone } = z.object({ zone: z.coerce.number().int() }).parse(req.params);
+    const body = z
+      .object({ gainDb: z.number().optional(), mute: z.boolean().optional(), source: z.number().int().optional() })
+      .parse(req.body);
+    if (body.source !== undefined) await devices.atlas.setZoneSource(zone, body.source);
+    if (body.gainDb !== undefined) await devices.atlas.setZoneGain(zone, body.gainDb);
+    if (body.mute !== undefined) await devices.atlas.setZoneMute(zone, body.mute);
+    return { ok: true };
+  });
+
+  app.post("/api/audio/scenes/:scene", async (req) => {
+    const { scene } = z.object({ scene: z.coerce.number().int() }).parse(req.params);
+    await devices.atlas.recallScene(scene);
+    return { ok: true };
+  });
+
+  // --- Scenes (macros across all systems) ---
+  app.post("/api/scenes/:id", async (req) => {
+    const { id } = z.object({ id: z.string() }).parse(req.params);
+    return scenes.run(id);
+  });
+
+  // --- TV guide ---
+  app.get("/api/guide", async () => ({ rows: guide.grid(), ...state.state.guide }));
+  app.post("/api/guide/refresh", async () => {
+    await guide.refresh();
+    return { ok: true };
+  });
+
+  // Live state push to every connected panel.
+  app.get("/ws", { websocket: true }, (socket) => {
+    const push = (s: unknown) => socket.send(JSON.stringify({ type: "state", state: s }));
+    push(state.state);
+    state.on("change", push);
+    socket.on("close", () => state.off("change", push));
+  });
+
+  return app;
+}

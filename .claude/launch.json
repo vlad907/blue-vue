@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "blue-vue",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "env": { "BLUEVUE_SIMULATE": "1" },
+      "port": 8080
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Blue Vue Control</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <h1 id="site">Blue Vue</h1>
+    <div class="status">
+      <span id="sim" class="pill warn" hidden>SIMULATION</span>
+      <span id="st-wall" class="pill">Wall: ?</span>
+      <span id="st-atlas" class="pill">DSP</span>
+      <span id="st-vw" class="pill">Wall API</span>
+      <span id="st-busy" class="pill busy" hidden>Running…</span>
+    </div>
+  </header>
+
+  <nav>
+    <button data-tab="scenes" class="active">Scenes</button>
+    <button data-tab="wall">Video Wall</button>
+    <button data-tab="boxes">Cable Boxes</button>
+    <button data-tab="guide">TV Guide</button>
+    <button data-tab="audio">Audio</button>
+  </nav>
+
+  <main>
+    <section id="tab-scenes" class="tab active">
+      <div id="scene-list" class="grid big"></div>
+    </section>
+
+    <section id="tab-wall" class="tab">
+      <h2>Power</h2>
+      <div class="row">
+        <button class="btn on" data-wall-power="true">Wall On</button>
+        <button class="btn off" data-wall-power="false">Wall Off</button>
+      </div>
+      <h2>Layout Presets</h2>
+      <div id="wall-presets" class="grid"></div>
+    </section>
+
+    <section id="tab-boxes" class="tab">
+      <div id="box-select" class="row seg"></div>
+      <div class="box-panel">
+        <div>
+          <div id="box-now" class="now"></div>
+          <h2>Favorites</h2>
+          <div id="box-favs" class="grid"></div>
+          <h2>All Channels</h2>
+          <div id="box-channels" class="grid small"></div>
+        </div>
+        <div class="remote">
+          <div class="entry"><span id="keypad-display">&nbsp;</span></div>
+          <div id="keypad" class="keypad"></div>
+          <div id="remote-keys" class="keypad"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-guide" class="tab">
+      <div class="row between">
+        <div id="guide-box-select" class="row seg"></div>
+        <span id="guide-updated" class="muted"></span>
+      </div>
+      <div id="guide" class="guide"></div>
+    </section>
+
+    <section id="tab-audio" class="tab">
+      <div id="zones" class="zones"></div>
+      <h2>DSP Scenes</h2>
+      <div id="atlas-scenes" class="grid"></div>
+    </section>
+  </main>
+
+  <div id="toast" hidden></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
