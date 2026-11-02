@@ -27,7 +27,7 @@ manufacturer: Acme
 category: projector           # display, tuner, audio, video-wall, switcher, projector, lighting, other
 
 transport:
-  type: tcp                   # tcp, udp, http, ir, adb, wol (serial arrives with wall-agent devices)
+  type: tcp                   # tcp, udp, http, serial, ir, adb, wol
   port: 4352
   terminator: "\r"            # added to every `send`
   delimiter: "\r"             # splits replies into messages (default "\n")
@@ -67,7 +67,7 @@ A command is a list of steps, run in order.
 
 | Step | Example |
 |---|---|
-| Send text (tcp/udp) | `send: "VOL {{level}}"` (`\r`, `\n` and `\x0D` work) |
+| Send text (tcp/udp/serial) | `send: "VOL {{level}}"` (`\r`, `\n` and `\x0D` work) |
 | Send bytes | `hex: "AA 01 {{level \| hex:2}}"` |
 | HTTP request | `http: { method: POST, path: "/api/input/{{input}}", body: '{"on":true}' }` |
 | IR code | `ir: KEY_POWERON` (a name from `irCodes`), plus `repeat: 2` if needed |
@@ -109,6 +109,9 @@ Capabilities connect your commands to features the rest of the system uses:
 - `tuner`: TV guide tap-to-tune and favorites
 - `volume`, `source`
 - `layoutPresets`: video wall layouts
+
+## Where a device connects from
+Each device has a **location**: `server` (the control PC), or the id of a wall agent. With a wall agent, its connection is made from that wall PC, which is how you reach a TV on the wall's network, an iTach next to the wall, or an RS-232 device on the PC's COM port. Serial devices use the `serialPort` setting (e.g. `COM3`), plus `baudRate` (or `transport.baudRate`), and optionally `dataBits`, `parity` and `stopBits`.
 
 ## Converting the old config
 ```bash

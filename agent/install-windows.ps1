@@ -7,6 +7,7 @@ param(
     [int]$Port = 8090,
     [string]$MosaicExe,          # optional: video wall software to launch at logon and keep running
     [string]$WallUser = "$env:USERDOMAIN\$env:USERNAME",
+    [switch]$Serial,             # install RS-232 support (the serialport package)
     [string]$TaskName = "BlueVueAgent"
 )
 $ErrorActionPreference = "Stop"
@@ -28,8 +29,18 @@ if (-not (Test-Path $config)) {
     $token = -join ((48..57) + (97..122) | Get-Random -Count 40 | ForEach-Object { [char]$_ })
     (Get-Content $config -Raw).Replace("CHANGE-ME-to-a-long-random-string", $token) | Set-Content $config
     Write-Host "Created agent.json with a new token. Edit it with this wall's panels, then re-run this script." -ForegroundColor Yellow
-    Write-Host "Token (put this in the control server's endpoints config): $token"
+    Write-Host "Token (enter it for this wall agent in the control server): $token"
+    Write-Host "Also set server.url in agent.json to ws://<control-server-ip>:8080/agent"
     exit 0
+}
+
+if ($Serial) {
+    Write-Host "Installing serial (RS-232) support..."
+    Push-Location $dir
+    npm install --no-save serialport
+    $ok = $LASTEXITCODE -eq 0
+    Pop-Location
+    if (-not $ok) { throw "npm install serialport failed" }
 }
 
 # Validate config before installing.

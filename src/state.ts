@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { AppStatus, PanelStatus } from "./drivers/endpoints.ts";
+import type { AgentView } from "./engine/agents.ts";
 import type { DeviceView } from "./engine/device-manager.ts";
 
 export interface ZoneState {
@@ -20,6 +21,7 @@ export interface WallState {
 
 export interface SystemState {
   devices: Record<string, DeviceView>; // profile-driven devices (engine)
+  agents: Record<string, AgentView>; // wall agents connected over the agent link
   walls: Record<string, WallState>;
   // IR is one-way, so box channels are the last commanded values, not confirmed.
   boxes: Record<string, { channel?: number; lastCommandAt?: string }>;
@@ -34,6 +36,7 @@ export interface SystemState {
 export class StateStore extends EventEmitter {
   state: SystemState = {
     devices: {},
+    agents: {},
     walls: {},
     boxes: {},
     atlas: { connected: false, zones: {} },

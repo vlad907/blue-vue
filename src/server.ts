@@ -177,6 +177,17 @@ function registerEngineRoutes(app: FastifyInstance, engine: Engine, state: State
     return { ok: true };
   });
 
+  app.get("/api/v2/agents", async () => state.state.agents);
+
+  app.post("/api/v2/agents/:id/apps/:name/restart", async (req) => {
+    const { id, name } = z.object({ id: z.string(), name: z.string() }).parse(req.params);
+    await engine.agents.restartApp(id, name);
+    return { ok: true };
+  });
+
+  // Wall agents dial in here; the hub checks their token in the first message.
+  app.get("/agent", { websocket: true }, (socket) => engine.agents.accept(socket));
+
   app.post("/api/v2/scenes/:id", async (req) => {
     const { id } = z.object({ id: z.string() }).parse(req.params);
     return engine.scenes.run(id);

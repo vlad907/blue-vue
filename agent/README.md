@@ -10,6 +10,20 @@ A small service that runs on each **Windows video wall PC** next to your mosaic 
 
 It has no dependencies; you only need Node.js 22.18+ installed.
 
+## Connecting to the control server
+
+The agent connects **out** to the control server over a WebSocket, so the server can reach devices on this wall's network or COM ports through it. Set the server address in `agent.json`:
+
+```json
+"server": { "url": "ws://<control-server-ip>:8080/agent" }
+```
+
+The agent's `name` is its id, and its `token` must match that agent's entry in the control server's site (`agents` in `data/site.json`, or the admin UI once it exists). The agent reconnects forever. While it's offline, its devices show as offline and commands fail with a clear "wall agent is offline" error. When it comes back, every device connection is re-opened automatically.
+
+Any profile device can live on a wall: set its **location** to the agent's id. Its TCP, UDP, HTTP, IR (iTach), ADB and **serial** connections are then made from this PC. For RS-232 devices, install serial support once with `install-windows.ps1 -Serial` (or `npm install serialport`), and set the device's `serialPort` setting (e.g. `COM3`) and `baudRate`.
+
+> The HTTP API and panel drivers below are what today's control panel uses. They're being replaced by profile devices and will be removed once the new touch panel ships.
+
 ## Panel drivers
 
 | Driver | For | Individually addressable | Reports state | Setup on the TV |

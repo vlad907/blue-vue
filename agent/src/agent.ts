@@ -4,6 +4,7 @@ import { hostname } from "node:os";
 import { resolve } from "node:path";
 import { AppWatcher, SimulatedProcessControl, windowsProcessControl } from "./apps.ts";
 import { COMMANDS, runCli } from "./cli.ts";
+import { AgentLink } from "./link.ts";
 import { type AgentConfig, loadConfig } from "./config.ts";
 import { IrService, createTransmitter } from "./ir.ts";
 import { log } from "./log.ts";
@@ -51,6 +52,9 @@ export function createAgent(cfg: AgentConfig) {
   const ir = new IrService(createTransmitter(cfg.ir, cfg.simulate), cfg.codes);
   const panels = new PanelManager(cfg, ir);
   const apps = new AppWatcher(cfg, cfg.simulate ? new SimulatedProcessControl(cfg.apps) : windowsProcessControl);
+  const link = cfg.server
+    ? new AgentLink({ url: cfg.server.url, id: cfg.name, token: cfg.token, version: VERSION, simulate: cfg.simulate, apps, log })
+    : undefined;
   const startedAt = Date.now();
 
   async function route(req: IncomingMessage, url: URL) {
@@ -130,9 +134,11 @@ export function createAgent(cfg: AgentConfig) {
     panels,
     apps,
     ir,
+    link,
     start(port = cfg.port) {
       panels.start();
       apps.start();
+      link?.start();
       return new Promise<number>((r) =>
         server.listen(port, () => r((server.address() as { port: number }).port)),
       );
@@ -140,6 +146,7 @@ export function createAgent(cfg: AgentConfig) {
     stop() {
       panels.stop();
       apps.stop();
+      link?.stop();
       server.close();
     },
   };

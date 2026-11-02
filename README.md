@@ -10,7 +10,7 @@ A touch-panel control system for:
 
 **Scenes** combine all of these into one button, for example "Open Venue" or "Game Day".
 
-> **Moving to data-driven devices.** Device types are becoming **profiles**: YAML files that describe a device's commands, feedback and controls, so new devices can be added without code (see [docs/profiles.md](docs/profiles.md)). The profile engine runs alongside the original drivers whenever `data/site.json` exists. Next up: devices on wall agents, the auto-generated touch panel, and the web admin.
+> **Moving to data-driven devices.** Device types are becoming **profiles**: YAML files that describe a device's commands, feedback and controls, so new devices can be added without code (see [docs/profiles.md](docs/profiles.md)). The profile engine runs alongside the original drivers whenever `data/site.json` exists. Devices can live on the control server or behind any wall agent, which connects out to the server over WebSocket. Next up: the auto-generated touch panel, then the web admin.
 
 ## Run
 

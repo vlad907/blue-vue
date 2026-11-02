@@ -20,7 +20,7 @@ export interface LogEntry {
   text: string;
 }
 
-export type ConnectionFactory = (profile: Profile, settings: Record<string, unknown>) => Connection;
+export type ConnectionFactory = (profile: Profile, settings: Record<string, unknown>, location: string) => Connection;
 
 /** A problem with the request (bad params, unknown command), not with the device. */
 export class CommandError extends Error {
@@ -50,7 +50,7 @@ export class DeviceRuntime extends EventEmitter {
   constructor(readonly device: DeviceConfig, readonly profile: Profile, factory: ConnectionFactory) {
     super();
     Object.assign(this.state, profile.simulator.state ?? {});
-    this.conn = factory(profile, { ...device.settings });
+    this.conn = factory(profile, { ...device.settings }, device.location);
     this.conn.on("log", (dir, text) => this.addLog(dir, text));
     this.conn.on("data", (msg: string) => this.applyUpdates(applyRules(this.profile.feedback, msg, this.context())));
     this.conn.on("status", (online: boolean) => this.onStatus(online));
@@ -264,6 +264,16 @@ function unescape(s: string) {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, Math.max(0, ms || 0)));
 
-export function defaultFactory(simulate: boolean): ConnectionFactory {
-  return (profile, settings) => createConnection(profile.transport, settings, simulate);
+/**
+ * Local devices connect directly; devices on a wall agent go through the hub.
+ * In simulation every device gets a simulated connection.
+ */
+export function defaultFactory(simulate: boolean, remote?: (agent: string, profile: Profile, settings: Record<string, unknown>) => Connection): ConnectionFactory {
+  return (profile, settings, location) => {
+    if (location !== "server" && !simulate) {
+      if (!remote) throw new Error("devices on wall agents need the agent hub");
+      return remote(location, profile, settings);
+    }
+    return createConnection(profile.transport, settings, simulate);
+  };
 }

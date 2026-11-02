@@ -1,4 +1,5 @@
 import { AdbConnection, HttpConnection, IrConnection, SimulatedConnection, UdpConnection, WolConnection } from "./others.ts";
+import { SerialConnection } from "./serial.ts";
 import { TcpConnection } from "./tcp.ts";
 import type { Connection, ConnectionSettings, TransportConfig } from "./types.ts";
 
@@ -14,6 +15,6 @@ export function createConnection(cfg: TransportConfig, settings: ConnectionSetti
     case "ir": return new IrConnection(cfg, settings);
     case "adb": return new AdbConnection(cfg, settings);
     case "wol": return new WolConnection(cfg, settings);
-    case "serial": throw new Error("Serial devices must be connected through a wall agent (coming in the next phase)");
+    case "serial": return new SerialConnection(cfg, settings);
   }
 }

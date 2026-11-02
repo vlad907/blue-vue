@@ -3,6 +3,7 @@
   "port": 8090,
   "token": "CHANGE-ME-to-a-long-random-string",
   "simulate": false,
+  "server": { "url": "ws://10.0.10.5:8080/agent" },
   "staggerMs": 250,
   "pollSeconds": 15,
 

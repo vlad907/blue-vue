@@ -39,6 +39,9 @@ export interface AgentConfig {
   codes: Record<string, Record<string, string>>;
   panels: PanelConfig[];
   apps: AppConfig[];
+  // Outbound link to the control server, e.g. "ws://10.0.10.5:8080/agent".
+  // The agent's `name` is its id and `token` must match the site's entry.
+  server?: { url: string };
 }
 
 export function loadConfig(path: string): AgentConfig {
@@ -53,6 +56,7 @@ export function loadConfig(path: string): AgentConfig {
     ir: raw.ir ?? { driver: "simulated" },
     codes: raw.codes ?? {},
     panels: raw.panels ?? [],
+    server: raw.server,
     apps: (raw.apps ?? []).map((a: any) => ({ task: "BlueVueMosaic", autoRestart: true, ...a })),
   };
   if (process.env.BLUEVUE_SIMULATE === "1") cfg.simulate = true;
@@ -75,6 +79,7 @@ export function loadConfig(path: string): AgentConfig {
       if (!p.remote || !cfg.codes[p.remote]) errors.push(`panel ${p.id}: remote "${p.remote}" not found in codes`);
     }
   }
+  if (cfg.server && !/^wss?:\/\/.+/.test(cfg.server.url ?? "")) errors.push("server.url must look like ws://control-server:8080/agent");
   for (const a of cfg.apps) {
     if (!a.name || !a.process) errors.push("each app needs name and process");
   }

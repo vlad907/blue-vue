@@ -58,9 +58,6 @@ export class DeviceManager {
 
     if (!device.enabled) return fail("disabled");
     if (!profile) return fail(`profile "${device.profile}" is missing or has errors`);
-    if (device.location !== "server" && !this.opts.simulate) {
-      return fail("devices on wall agents arrive in the next phase");
-    }
     let settings: Record<string, unknown>;
     try {
       settings = resolveSettings(profile.settings, device.settings);
