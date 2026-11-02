@@ -2,9 +2,7 @@
 
 A small service that runs on each **Windows video wall PC** next to your mosaic software. The central Blue Vue server sends it commands, and the agent:
 
-- powers individual panels or the whole wall on and off, and switches inputs
-- reports each panel's real power state (Roku and ADB panels)
-- sends IR from this wall's IR hardware, typically to the Xfinity boxes at this wall
+- connects out to the control server, and makes the connections the server needs to this wall's devices: TVs on the wall's network, the iTach next to the wall, and RS-232 devices on this PC's COM ports
 - watches the video wall software and restarts it if it stops
 - includes commissioning commands to find panels and learn IR codes
 
@@ -22,30 +20,9 @@ The agent's `name` is its id, and its `token` must match that agent's entry in t
 
 Any profile device can live on a wall: set its **location** to the agent's id. Its TCP, UDP, HTTP, IR (iTach), ADB and **serial** connections are then made from this PC. For RS-232 devices, install serial support once with `install-windows.ps1 -Serial` (or `npm install serialport`), and set the device's `serialPort` setting (e.g. `COM3`) and `baudRate`.
 
-> The HTTP API and panel drivers below are what today's control panel uses. They're being replaced by profile devices and will be removed once the new touch panel ships.
+## IR codes
 
-## Panel drivers
-
-| Driver | For | Individually addressable | Reports state | Setup on the TV |
-|---|---|---|---|---|
-| `roku` | **TCL Roku TVs** (recommended) | yes | yes | Settings › System › Power › **Fast TV start: On**; Settings › System › Advanced system settings › **Control by mobile apps › Network access: Permissive** |
-| `adb` | **TCL Google TVs** | yes | yes | Enable Developer options › **Network debugging**; accept the "Allow debugging" prompt on first connect (tick *Always allow*). Install Android platform-tools and set `ADB_PATH` if `adb` isn't on PATH. |
-| `ir` | Any TV (fallback) | only one panel per IR port | no | Needs discrete `KEY_POWERON`/`KEY_POWEROFF` codes |
-
-On **every** panel, regardless of driver:
-- Turn off **Auto power off** and energy saving, so the TVs don't sleep on their own.
-- Set **Power on** to **Last used input**, so the panel comes up on the PC's HDMI instead of the TV home screen.
-- Give it a **DHCP reservation** so its IP never changes, and use Ethernet rather than Wi-Fi.
-
-## IR hardware
-
-| `ir.driver` | Hardware | Notes |
-|---|---|---|
-| `globalcache` | Global Caché iTach IP2IR (recommended) | 3 independent IR ports on the network. Supports discrete codes and learning (iLearn). |
-| `command` | Any USB blaster that has a command-line tool (USB-UIRT, IguanaIR, …) | `args` supports the placeholders `{port}` `{pronto}` `{freq}` `{remote}` `{key}` |
-| `simulated` | none | Logs only |
-
-Codes are stored as **raw Pronto hex** under `codes[remote][key]`. You can get them from Global Caché's free *Control Tower* IR database (it has TCL and Xfinity codes), or learn them from the physical remote with Global Caché *iLearn*.
+IR devices (Xfinity boxes, IR TVs) are driven through a Global Caché iTach (IP2IR, 3 ports). Codes are **raw Pronto hex**. You can get them from Global Caché's free *Control Tower* database (it has TCL and Xfinity codes), or learn them here with `learn` (below), which uses the iTach in `ir.host`. Learned codes are saved in this agent's `agent.json`. Copy them into a custom profile on the control server; they work on every wall with the same models.
 
 ## Install on a wall PC
 
@@ -99,16 +76,3 @@ The agent runs as SYSTEM, and Windows would show anything SYSTEM launches on an 
 Logs go to `logs\agent.log`. To remove the agent, run `uninstall-windows.ps1`.
 
 Test without hardware: `BLUEVUE_SIMULATE=1 npm start`, or set `"simulate": true`.
-
-## API
-
-Every endpoint except `/health` requires `Authorization: Bearer <token>`.
-
-| Method | Path | Body |
-|---|---|---|
-| GET | `/health` | |
-| GET | `/status` | returns `{ name, panels: [{ id, name, driver, power, reachable, confirmed }], apps: [{ name, running }] }` |
-| POST | `/panels/power` | `{ "on": true, "panels": ["r1c1"] }` (omit `panels` to target the whole wall) |
-| POST | `/panels/input` | `{ "input": "hdmi1", "panels": [...] }` |
-| POST | `/apps/:name/restart` | |
-| POST | `/ir/send` | `{ "port": 2, "remote": "xfinity", "key": "KEY_5" }` or `{ "port": 2, "pronto": "0000 ..." }` |

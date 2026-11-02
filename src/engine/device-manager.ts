@@ -128,6 +128,22 @@ export class DeviceManager {
     await rt.execute(def[action], params);
   }
 
+  /** Uses a capability on every device in a group (e.g. power a wall of mixed TV models), staggered. */
+  async groupCapability(groupId: string, cap: keyof Capabilities, action: string, value?: unknown) {
+    const group = this.site?.groups.find((g) => g.id === groupId);
+    if (!group) throw Object.assign(new CommandError(`Unknown group "${groupId}"`), { statusCode: 404 });
+    const errors: string[] = [];
+    for (const [i, id] of group.devices.entries()) {
+      try {
+        await this.capability(id, cap, action, value);
+      } catch (err) {
+        errors.push(`${id}: ${err instanceof Error ? err.message : err}`);
+      }
+      if (i < group.devices.length - 1) await sleep(group.staggerMs);
+    }
+    if (errors.length) throw new Error(errors.join("; "));
+  }
+
   /** Devices whose profile offers a capability, e.g. every tuner for the TV guide. */
   withCapability(cap: keyof Capabilities): string[] {
     return [...this.runtimes.values()].filter((rt) => rt.profile.capabilities[cap]).map((rt) => rt.device.id);

@@ -133,6 +133,7 @@ export type Control = {
   off?: string; // toggle: command for off
   keys?: Record<string, string>; // dpad/keypad: button -> param value
   repeat?: string; // group: repeat for each item of a settings list
+  options?: string; // select/presets: settings list to offer, e.g. "settings.favorites"
   controls?: Control[];
 };
 export const Control: z.ZodType<Control> = z.lazy(() =>
@@ -147,6 +148,7 @@ export const Control: z.ZodType<Control> = z.lazy(() =>
     off: z.string().optional(),
     keys: z.record(z.string()).optional(),
     repeat: z.string().optional(),
+    options: z.string().optional(),
     controls: z.array(Control).optional(),
   }),
 );

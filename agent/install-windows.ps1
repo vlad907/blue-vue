@@ -3,7 +3,7 @@
 #   powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -ControlServer 10.0.10.5 `
 #       -MosaicExe "C:\Program Files\Mosaic\MosaicWall.exe"
 param(
-    [Parameter(Mandatory = $true)][string]$ControlServer,   # IP allowed to reach the agent
+    [Parameter(Mandatory = $true)][string]$ControlServer,   # control server IP; the agent connects out to it
     [int]$Port = 8090,
     [string]$MosaicExe,          # optional: video wall software to launch at logon and keep running
     [string]$WallUser = "$env:USERDOMAIN\$env:USERNAME",
@@ -27,10 +27,11 @@ $config = Join-Path $dir "agent.json"
 if (-not (Test-Path $config)) {
     Copy-Item (Join-Path $dir "agent.example.json") $config
     $token = -join ((48..57) + (97..122) | Get-Random -Count 40 | ForEach-Object { [char]$_ })
-    (Get-Content $config -Raw).Replace("CHANGE-ME-to-a-long-random-string", $token) | Set-Content $config
-    Write-Host "Created agent.json with a new token. Edit it with this wall's panels, then re-run this script." -ForegroundColor Yellow
-    Write-Host "Token (enter it for this wall agent in the control server): $token"
-    Write-Host "Also set server.url in agent.json to ws://<control-server-ip>:8080/agent"
+    (Get-Content $config -Raw).Replace("CHANGE-ME-to-a-long-random-string", $token).Replace("10.0.10.5", $ControlServer) | Set-Content $config
+    Write-Host "Created agent.json with a new token, connecting to ws://${ControlServer}:8080/agent." -ForegroundColor Yellow
+    Write-Host "Set this wall's id in agent.json (`"name`"), and add the agent with this token on the control server:"
+    Write-Host "  $token"
+    Write-Host "Then re-run this script."
     exit 0
 }
 
@@ -68,9 +69,9 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings `
     -User "SYSTEM" -RunLevel Highest -Force | Out-Null
 
+# The agent only connects out to the control server, so no inbound firewall rule is
+# needed. Remove the one older versions created.
 Get-NetFirewallRule -DisplayName "Blue Vue Agent" -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-New-NetFirewallRule -DisplayName "Blue Vue Agent" -Direction Inbound -Protocol TCP -LocalPort $Port `
-    -RemoteAddress $ControlServer -Action Allow | Out-Null
 
 # The agent runs as SYSTEM, which can't show windows on the wall. This task
 # launches the video wall software in the wall user's desktop session at logon,
@@ -93,7 +94,8 @@ Start-ScheduledTask -TaskName $TaskName
 Start-Sleep -Seconds 3
 try {
     $health = Invoke-RestMethod "http://localhost:$Port/health" -TimeoutSec 5
-    Write-Host "Agent '$($health.name)' is running on port $Port." -ForegroundColor Green
+    $state = if ($health.connected) { "connected to the control server" } else { "running, not connected to the control server yet" }
+    Write-Host "Agent '$($health.name)' is $state." -ForegroundColor Green
 } catch {
     Write-Warning "Agent did not answer on port $Port. Check $dir\logs\agent.log"
 }

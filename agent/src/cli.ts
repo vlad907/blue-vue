@@ -38,9 +38,9 @@ async function discover() {
     const warn = d.network === "wifi" ? "  <- on Wi-Fi; use Ethernet" : "";
     console.log(`${d.host.padEnd(16)} ${(d.name ?? "?").padEnd(24)} ${(d.model ?? "").padEnd(20)} ${d.power ?? ""}${warn}`);
   }
-  console.log('\nPanel entries for agent.json (rename id/name to match each panel\'s position):\n');
+  console.log("\nDevice entries for the control server's site (set location to this wall's agent id, and rename to each panel's position):\n");
   devices.filter((d) => d.isTv).forEach((d, i) =>
-    console.log(`    ${JSON.stringify({ id: `p${i + 1}`, name: d.name ?? `Panel ${i + 1}`, driver: "roku", host: d.host, input: "hdmi1" })},`),
+    console.log(`    ${JSON.stringify({ id: `panel${i + 1}`, name: d.name ?? `Panel ${i + 1}`, profile: "tcl-roku-tv", location: "<agent id>", settings: { host: d.host } })},`),
   );
   console.log("\nTip: turn one panel off to see which IP is which, or use its name from Settings > System > About.");
 }
@@ -76,6 +76,7 @@ async function learn(args: string[], configPath: string) {
     rl.close();
   }
   console.log(`\nTest a code with: node src/agent.ts send <port> ${remote} <KEY>`);
+  console.log("Then copy the codes from agent.json into a custom profile's irCodes on the control server.");
 }
 
 async function send(args: string[], configPath: string) {

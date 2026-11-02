@@ -1,4 +1,7 @@
 import type { Config } from "../config.ts";
+import type { Site } from "../engine/site.ts";
+
+type Channel = Site["channels"][number];
 import type { StateStore } from "../state.ts";
 
 export interface Airing {
@@ -24,13 +27,13 @@ export interface GuideRow {
 /**
  * Gracenote OnConnect (TMS) listings. Only channels in config with a
  * `stationId` are fetched; find station IDs for your Xfinity lineup with
- * `npm run gracenote -- channels <lineupId>`.
+ * `npm run gracenote -- channels <lineupId>` and add them to the site's channels.
  */
 export class GracenoteGuide {
   private rows: GuideRow[] = [];
   private timer?: NodeJS.Timeout;
 
-  constructor(private cfg: Config, private state: StateStore) {}
+  constructor(private cfg: Config, private state: StateStore, private channels: () => Channel[]) {}
 
   get apiKey() {
     return process.env[this.cfg.guide.apiKeyEnv];
@@ -69,7 +72,7 @@ export class GracenoteGuide {
   }
 
   private async fetchGrid(): Promise<GuideRow[]> {
-    const channels = this.cfg.channels.filter((c) => c.stationId);
+    const channels = this.channels().filter((c) => c.stationId);
     if (!channels.length) return [];
 
     const start = new Date();
@@ -104,7 +107,7 @@ export class GracenoteGuide {
     const shows = ["SportsCenter", "College Football", "NFL Live", "Local News", "NBA Tonight", "Movie: The Long Game", "Hockey Night", "Poker Championship"];
     const start = new Date();
     start.setMinutes(start.getMinutes() < 30 ? 0 : 30, 0, 0);
-    return this.cfg.channels.map((c, ci) => {
+    return this.channels().map((c, ci) => {
       const airings: Airing[] = [];
       let t = start.getTime();
       for (let i = 0; t < start.getTime() + this.cfg.guide.hours * 3_600_000; i++) {

@@ -5,7 +5,7 @@
 //       [--agent wall1=path/to/wall1/agent.json ...] [--data data] [--force]
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { ConfigSchema, type Config } from "../src/config.ts";
+import { LegacyConfigSchema, type LegacyConfig } from "./legacy-config.ts";
 import { ProfileLibrary } from "../src/engine/profiles.ts";
 import { SiteStore, type SceneStep } from "../src/engine/site.ts";
 
@@ -16,7 +16,7 @@ interface AgentFile {
   panels?: { id: string; name: string; driver: string; host?: string; port?: number; remote?: string; input?: string }[];
 }
 
-export function migrate(cfg: Config, agents: Record<string, AgentFile>) {
+export function migrate(cfg: LegacyConfig, agents: Record<string, AgentFile>) {
   const warnings: string[] = [];
   const devices: Record<string, unknown>[] = [];
   const groups: Record<string, unknown>[] = [];
@@ -171,7 +171,7 @@ if (import.meta.filename === resolve(process.argv[1] ?? "")) {
     agents[id] = JSON.parse(readFileSync(path, "utf8"));
   });
 
-  const cfg = ConfigSchema.parse(JSON.parse(readFileSync(systemPath, "utf8")));
+  const cfg = LegacyConfigSchema.parse(JSON.parse(readFileSync(systemPath, "utf8")));
   const store = new SiteStore(dataDir);
   if (store.exists() && !args.includes("--force")) {
     console.error(`${store.file} already exists. Re-run with --force to overwrite (the current one is kept as a snapshot).`);

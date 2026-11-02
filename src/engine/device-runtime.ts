@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { type Connection, type RenderedPayload, createConnection } from "../../agent/src/transports/index.ts";
+import { type Connection, type RenderedPayload, SimulatedConnection, createConnection } from "../../agent/src/transports/index.ts";
 import { applyRules, type StateUpdates } from "./parsers.ts";
 import type { Command, Param, ParseRule, Profile, Step } from "./profile-schema.ts";
 import { type Context, isTruthy, lookup, render, renderValue } from "./template.ts";
@@ -161,7 +161,8 @@ export class DeviceRuntime extends EventEmitter {
     }
     if (step.ir !== undefined) {
       const key = render(step.ir, ctx);
-      const pronto = this.profile.irCodes[key];
+      // In simulation, unlearned codes still "send" so scenes can be tried out before codes are learned.
+      const pronto = this.profile.irCodes[key] ?? (this.conn instanceof SimulatedConnection ? "0000 006D 0000 0001 0001 0001" : undefined);
       if (!pronto) throw new Error(`No IR code "${key}" in profile ${this.profile.id}. Learn it in the profile editor.`);
       return { kind: "ir", pronto, repeat: step.repeat ?? 1, label: key };
     }

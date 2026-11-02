@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { migrate } from "../../scripts/migrate-config.ts";
-import { ConfigSchema } from "../../src/config.ts";
+import { LegacyConfigSchema } from "../../scripts/legacy-config.ts";
 import { DeviceManager } from "../../src/engine/device-manager.ts";
 import { BUILTIN_PROFILES } from "../../src/engine/index.ts";
 import { ProfileLibrary } from "../../src/engine/profiles.ts";
@@ -16,8 +16,8 @@ const root = join(import.meta.dirname, "../..");
 const PRONTO = "0000 006D 0000 0002 0155 00AA 0015 0040";
 
 test("today's system.json and agent.json migrate to a valid site that runs the same scenes", async () => {
-  const cfg = ConfigSchema.parse({ ...JSON.parse(readFileSync(join(root, "config/system.json"), "utf8")), simulate: true });
-  const agent = JSON.parse(readFileSync(join(root, "agent/agent.example.json"), "utf8"));
+  const cfg = LegacyConfigSchema.parse({ ...JSON.parse(readFileSync(join(root, "test/fixtures/legacy-system.json"), "utf8")), simulate: true });
+  const agent = JSON.parse(readFileSync(join(root, "test/fixtures/legacy-agent.json"), "utf8"));
   agent.codes.xfinity = { KEY_0: PRONTO, KEY_1: PRONTO, KEY_2: PRONTO, KEY_4: PRONTO, KEY_5: PRONTO, KEY_6: PRONTO, KEY_OK: PRONTO, KEY_PLACEHOLDER: "PASTE PRONTO HEX" };
 
   const wall2 = { name: "wall2", ir: { driver: "globalcache", host: "10.0.10.32" }, panels: [] };

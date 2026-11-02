@@ -117,4 +117,4 @@ Each device has a **location**: `server` (the control PC), or the id of a wall a
 ```bash
 npx tsx scripts/migrate-config.ts --system config/system.local.json --agent wall1=path/to/wall1/agent.json --agent wall2=...
 ```
-This writes `data/site.json` and adds custom profiles for any learned IR codes. The server starts the profile engine whenever `data/site.json` exists. The v2 API is at `/api/v2/...` (devices, commands, groups, scenes and profiles).
+This writes `data/site.json` and adds custom profiles for any learned IR codes. The server also does this automatically on first start if it finds an old-format config.

@@ -39,7 +39,8 @@ export class AgentHub {
   private nextReq = 1;
   private nextConn = 1;
 
-  constructor(private getAgents: () => AgentEntry[], private state: StateStore) {
+  // In simulation no agents dial in, so each one shows as online with a running wall app.
+  constructor(private getAgents: () => AgentEntry[], private state: StateStore, private simulate = false) {
     this.syncViews();
   }
 
@@ -49,6 +50,7 @@ export class AgentHub {
     this.state.update((s) => {
       for (const a of agents) {
         s.agents[a.id] = { ...(s.agents[a.id] ?? { online: false, apps: [] }), name: a.name, paired: true };
+        if (this.simulate) Object.assign(s.agents[a.id], { online: true, host: "simulated", apps: [{ name: "Mosaic", running: true, autoRestart: true }] });
       }
       for (const id of Object.keys(s.agents)) {
         if (!agents.some((a) => a.id === id) && s.agents[id].paired) delete s.agents[id];
@@ -184,6 +186,10 @@ export class AgentHub {
   }
 
   async restartApp(agent: string, name: string) {
+    if (this.simulate) {
+      console.log(`[agents:sim] restart ${name} on ${agent}`);
+      return;
+    }
     await this.request(agent, (reqId) => ({ type: "app.restart", reqId, name }));
   }
 

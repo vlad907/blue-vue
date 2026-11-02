@@ -66,7 +66,7 @@ capabilities:
 
 controls:
   - { type: status, label: Channel, state: channel }
-  - { type: presets, label: Favorites, command: tune, param: channel }
+  - { type: presets, label: Favorites, command: tune, param: channel, options: settings.favorites, state: channel }
   - { type: keypad, label: Tune, command: tune, param: channel }
   - type: dpad
     command: key

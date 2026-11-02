@@ -4,6 +4,8 @@ import { parse as parseYaml, stringify as toYaml } from "yaml";
 import { type Profile, ProfileSchema } from "./profile-schema.ts";
 import { check } from "./template.ts";
 
+export const BUILTIN_PROFILES = join(import.meta.dirname, "..", "..", "profiles", "builtin");
+
 export interface ProfileEntry {
   profile?: Profile;
   source: "builtin" | "custom";

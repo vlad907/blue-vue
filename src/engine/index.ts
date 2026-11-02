@@ -3,11 +3,11 @@ import type { StateStore } from "../state.ts";
 import { AgentHub } from "./agents.ts";
 import { DeviceManager } from "./device-manager.ts";
 import { defaultFactory } from "./device-runtime.ts";
-import { ProfileLibrary } from "./profiles.ts";
+import { BUILTIN_PROFILES, ProfileLibrary } from "./profiles.ts";
 import { EngineSceneRunner } from "./scenes.ts";
 import { type Site, SiteStore } from "./site.ts";
 
-export const BUILTIN_PROFILES = join(import.meta.dirname, "..", "..", "profiles", "builtin");
+export { BUILTIN_PROFILES };
 
 export interface Engine {
   profiles: ProfileLibrary;
@@ -24,7 +24,7 @@ export function startEngine(dataDir: string, state: StateStore, simulate: boolea
   const store = new SiteStore(dataDir);
   const profiles = new ProfileLibrary(BUILTIN_PROFILES, join(dataDir, "profiles")).load();
   let site = store.load();
-  const agents = new AgentHub(() => site.agents, state);
+  const agents = new AgentHub(() => site.agents, state, simulate);
   const factory = defaultFactory(simulate, (agent, profile, settings) => agents.connection(agent, profile.transport, settings));
   const devices = new DeviceManager(profiles, state, { simulate, factory });
   devices.apply(site);

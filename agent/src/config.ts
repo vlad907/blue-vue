@@ -1,17 +1,5 @@
 import { readFileSync } from "node:fs";
 
-export type PanelDriverName = "roku" | "adb" | "ir" | "simulated";
-
-export interface PanelConfig {
-  id: string;
-  name: string;
-  driver: PanelDriverName;
-  host?: string; // roku, adb
-  port?: number; // ir: transmitter output port
-  remote?: string; // ir: name in `codes`
-  input?: string; // input to select after power-on, e.g. "hdmi1"
-}
-
 export interface AppConfig {
   name: string; // shown in the control panel, e.g. "Mosaic"
   process: string; // image name, e.g. "MosaicWall.exe"
@@ -32,12 +20,11 @@ export interface AgentConfig {
   port: number;
   token: string;
   simulate: boolean;
-  staggerMs: number;
   pollSeconds: number;
+  // Used by the commissioning commands (learn/send) only; devices are driven by the server.
   ir: IrConfig;
-  // Pronto hex codes: codes[remote][key] = "0000 006D ..."
+  // Learned Pronto codes: codes[remote][key]. Copy them into a custom profile's irCodes.
   codes: Record<string, Record<string, string>>;
-  panels: PanelConfig[];
   apps: AppConfig[];
   // Outbound link to the control server, e.g. "ws://10.0.10.5:8080/agent".
   // The agent's `name` is its id and `token` must match the site's entry.
@@ -51,11 +38,9 @@ export function loadConfig(path: string): AgentConfig {
     port: raw.port ?? 8090,
     token: raw.token,
     simulate: raw.simulate ?? false,
-    staggerMs: raw.staggerMs ?? 250,
     pollSeconds: raw.pollSeconds ?? 15,
     ir: raw.ir ?? { driver: "simulated" },
     codes: raw.codes ?? {},
-    panels: raw.panels ?? [],
     server: raw.server,
     apps: (raw.apps ?? []).map((a: any) => ({ task: "BlueVueMosaic", autoRestart: true, ...a })),
   };
@@ -68,17 +53,7 @@ export function loadConfig(path: string): AgentConfig {
   if (cfg.ir.driver === "globalcache" && !cfg.ir.host && !cfg.simulate) errors.push("ir.host is required for globalcache");
   if (cfg.ir.driver === "command" && !cfg.ir.command && !cfg.simulate) errors.push("ir.command is required for the command driver");
 
-  const ids = new Set<string>();
-  for (const p of cfg.panels) {
-    if (!p.id || ids.has(p.id)) errors.push(`panel id "${p.id}" is missing or duplicated`);
-    ids.add(p.id);
-    if (!["roku", "adb", "ir", "simulated"].includes(p.driver)) errors.push(`panel ${p.id}: driver "${p.driver}" is invalid`);
-    if ((p.driver === "roku" || p.driver === "adb") && !p.host) errors.push(`panel ${p.id}: host is required`);
-    if (p.driver === "ir") {
-      if (!p.port) errors.push(`panel ${p.id}: port is required`);
-      if (!p.remote || !cfg.codes[p.remote]) errors.push(`panel ${p.id}: remote "${p.remote}" not found in codes`);
-    }
-  }
+  if (raw.panels?.length) console.warn("agent.json: \"panels\" is no longer used; panels are devices in the control server's site now");
   if (cfg.server && !/^wss?:\/\/.+/.test(cfg.server.url ?? "")) errors.push("server.url must look like ws://control-server:8080/agent");
   for (const a of cfg.apps) {
     if (!a.name || !a.process) errors.push("each app needs name and process");

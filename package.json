@@ -7,9 +7,11 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
-    "test": "node --import tsx --test test/*.test.ts test/engine/*.test.ts",
-    "typecheck": "tsc --noEmit",
-    "gracenote": "tsx src/tools/gracenote.ts"
+    "test": "node --import tsx --test test/engine/*.test.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web",
+    "gracenote": "tsx src/tools/gracenote.ts",
+    "build": "vite build web",
+    "dev:web": "vite web"
   },
   "engines": {
     "node": ">=20"
@@ -24,7 +26,13 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
     "@types/ws": "^8.18.2",
-    "typescript": "^5.9.3"
+    "@vitejs/plugin-react": "^4.3.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.10"
   }
 }

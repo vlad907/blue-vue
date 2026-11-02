@@ -1,77 +1,81 @@
 # Blue Vue Control
 
-A touch-panel control system for:
+A touch-panel control system for venues: video walls of TVs, Xfinity boxes with a TV guide, an AtlasIED Atmosphere DSP, and video wall layout presets. **Scenes** combine everything into one button, for example "Open Venue" or "Game Day".
 
-1. **Video wall TVs**: per-panel power and input control on every wall, through an agent on each wall's Windows PC ([agent/](agent/README.md))
-2. **Xfinity boxes**: channel tuning, favorites and a full remote over IR
-3. **TV guide**: Gracenote (TMS OnConnect) listings; tap a show to tune
-4. **AtlasIED Atmosphere DSP**: zone source, gain, mute and scenes over TCP JSON-RPC
-5. **Video wall processor**: layout presets over HTTP (placeholder until the API schema is final)
+Every device is described by a **profile**: a YAML file listing its commands, how to read its state, and which controls to show. The touch panel builds itself from those profiles. Adding a new kind of device means writing a profile, not code (see [docs/profiles.md](docs/profiles.md)).
 
-**Scenes** combine all of these into one button, for example "Open Venue" or "Game Day".
+Built-in profiles: AtlasIED Atmosphere, Xfinity box (IR via iTach), TCL Roku TV, TCL Google TV, generic IR TV, and an HTTP video wall controller (a placeholder until that API's schema is final).
 
-> **Moving to data-driven devices.** Device types are becoming **profiles**: YAML files that describe a device's commands, feedback and controls, so new devices can be added without code (see [docs/profiles.md](docs/profiles.md)). The profile engine runs alongside the original drivers whenever `data/site.json` exists. Devices can live on the control server or behind any wall agent, which connects out to the server over WebSocket. Next up: the auto-generated touch panel, then the web admin.
+## How it fits together
+
+```
+ tablets ──http/ws──▶  control server (Windows mini PC)  ◀──ws── wall agent (each video wall PC)
+                        • profile engine, scenes, guide            • connects to that wall's TVs,
+                        • touch panel at :8080                       iTach and COM ports for the server
+                        • devices on its own network               • keeps the mosaic software running
+```
+
+- **Site** (`data/site.json`): devices, rooms, video walls (groups of panels), scenes, channels and wall agents. Each save keeps a snapshot of the previous version.
+- **Device location**: `server`, or a wall agent's id. A device on a wall agent is reached from that wall PC, which is how TVs on a wall's network, the iTach next to a wall, and RS-232 on a wall PC work.
+- **Wall agents** connect out to the server, so wall PCs need no inbound firewall rule. See [agent/README.md](agent/README.md).
 
 ## Run
 
 ```bash
 npm install
-BLUEVUE_SIMULATE=1 npm run dev     # no hardware needed
-npm start                          # real hardware
+npm run build                       # build the touch panel (web/dist)
+BLUEVUE_SIMULATE=1 npm run dev      # simulated devices, no hardware needed
+npm start                           # real hardware
 ```
+
+On first start the server creates `data/site.json`:
+- If `config/system.local.json` is an old-format config with devices in it, it's migrated. Wall panels need the walls' `agent.json` files; see `scripts/migrate-config.ts`.
+- Otherwise the server copies [config/example-site.json](config/example-site.json) as a starting point.
+
+Open `http://<control-pc-ip>:8080` on any tablet on the network. On an iPad, use "Add to Home Screen" so it runs full-screen.
+
+While working on the panel, `npm run dev:web` serves it with hot reload on :5173, with API calls forwarded to :8080.
 
 **Install on the Windows control PC** (elevated PowerShell, from the project folder):
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
 ```
-The first run creates `config\system.local.json` and a `.env` file for secrets (the Gracenote key and the wall tokens). Fill them in and run the script again. The second run sets the server to start at boot, restarts it if it exits, and opens port 8080 to the local network. Logs go to `logs\server.log`.
+The first run creates `config\system.local.json` and a `.env` file for secrets (the Gracenote key). Fill them in and run the script again. The second run builds the panel, sets the server to start at boot and restart if it exits, and opens port 8080 to the local network. Logs go to `logs\server.log`.
 
-Open `http://<control-box-ip>:8080` on any tablet on the LAN. On an iPad, use "Add to Home Screen" so it runs full-screen.
+`config/system.json` only holds server settings (port, data folder, simulation, guide). Everything else is in the site.
 
-Config is read from `config/system.local.json` if it exists (gitignored, for site-specific settings), otherwise from `config/system.json`.
+## Setting up a site
 
-## Hardware notes
+Until the admin UI arrives, edit `data/site.json` (restart the server to apply) and use the profiles in `profiles/builtin/`:
+- **TCL Roku panels** (`tcl-roku-tv`): network control. On each TV, turn on Fast TV start, set Control by mobile apps to Permissive, turn off Auto power off, and set Power on to Last used input. Run `node src/agent.ts discover` on a wall PC to find them all.
+- **Xfinity boxes** (`xfinity-ir`): IR through a Global Caché iTach, with **one iTach port per box**. Identical boxes respond to the same codes, so if one emitter can reach two boxes, both will change channel. Learn codes once with `node src/agent.ts learn xfinity` on a wall PC, then put them in a custom profile that `extends: xfinity-ir` (see [docs/profiles.md](docs/profiles.md)).
+- **Atlas** (`atlas-atmosphere`): enable third-party control in Atmosphere. Zones, sources and scenes are numbered from 0, in Atmosphere's order. Changes made from Atmosphere wall panels show up live.
+- **Video walls**: a group with `"kind": "wall"` whose devices are the panels. The Video Walls tab shows each wall's panels, and its PC and mosaic software status.
 
-### Video walls and IR (wall agents)
-Each Windows video wall PC runs the **Blue Vue agent** (see [agent/README.md](agent/README.md)). The agent controls that wall's panels (TCL Roku TVs over the network, Google TVs over ADB, or IR as a fallback) and owns that wall's IR hardware for the Xfinity boxes. Add each wall under `endpoints`, and point each box's emitter at an endpoint and IR port:
-
-```json
-"endpoints": [{ "id": "wall1", "name": "Main Bar", "url": "http://10.0.10.21:8090", "token": "..." }],
-"emitters":  { "box1": { "endpoint": "wall1", "port": 1 } }
-```
-
-- **Each Xfinity box needs its own IR port.** Identical boxes respond to the same codes, so if one emitter can reach two boxes, both will change channel.
-- The control server polls every wall's panels, so the UI shows real power state for network-controlled panels. Panels driven by IR show a dashed border, because their state is only the last command sent, not a confirmed reading.
-- An emitter without `endpoint` falls back to local LIRC (`socket`/`transmitters`) on a Linux control server.
-
-### Atlas Atmosphere
-TCP port 5321, newline-delimited JSON-RPC 2.0. The client subscribes to `ZoneGain_N`, `ZoneMute_N` and `ZoneSource_N`, so changes made from wall panels or the Atmosphere web UI show up live. It reconnects automatically. You may need to enable third-party control in the Atmosphere UI. Zone and source indexes are 0-based.
-
-### Gracenote
+### TV guide (Gracenote)
 ```bash
 export GRACENOTE_API_KEY=...
-npm run gracenote -- lineups 19103          # find your Xfinity lineupId
-npm run gracenote -- channels USA-PA12345-X  # print channel entries with stationIds
+npm run gracenote -- lineups 19103            # find your Xfinity lineupId
+npm run gracenote -- channels USA-PA12345-X   # channel entries with stationIds for the site
 ```
-Set `guide.lineupId` and paste `stationId`s into `channels`. If there is no key or lineup, the guide shows simulated data.
-
-### Video wall API
-`src/drivers/videoWall.ts` currently sends a request to `baseUrl + recallPath` (with `{id}` replaced by the preset ID). Once the API schema is final, replace `HttpVideoWall.doRecall`. The rest of the app uses the `VideoWallController` interface.
+Set `guide.lineupId` in the config, and add `stationId`s to the site's channels. Without a key or lineup, the guide shows sample data. Any device with the `tuner` capability can be tuned from the guide.
 
 ## API
 
 | Method | Path | Body |
 |---|---|---|
-| GET | `/api/config`, `/api/state`, `/api/guide` | |
-| POST | `/api/wall/power` | `{ "on": true, "wall": "wall1", "panels": ["r1c1"] }` (wall and panels optional) |
-| POST | `/api/wall/input` | `{ "input": "hdmi1", "wall": "wall1" }` |
-| POST | `/api/walls/:wall/apps/:name/restart` | |
-| POST | `/api/wall/preset/:id` | |
-| POST | `/api/boxes/:id/tune` | `{ "channel": 206 }` |
-| POST | `/api/boxes/:id/key` | `{ "key": "KEY_CHANNELUP" }` |
-| POST | `/api/audio/zones/:zone` | `{ "gainDb": -20, "mute": false, "source": 1 }` |
-| POST | `/api/audio/scenes/:n` | |
-| POST | `/api/scenes/:id` | |
+| GET | `/api/ui` | everything the panel needs (devices, profiles' controls, rooms, walls, scenes, channels) |
+| GET | `/api/state`, `/api/guide` | |
+| GET | `/api/v2/site`, `/api/v2/profiles`, `/api/v2/profiles/:id`, `/api/v2/devices`, `/api/v2/devices/:id/log`, `/api/v2/agents` | |
+| POST | `/api/v2/devices/:id/commands/:command` | `{ "params": { "zone": 0, "db": -20 } }` |
+| POST | `/api/v2/devices/:id/capabilities/:cap/:action` | `{ "value": 206 }`, e.g. `tuner/tune`, `power/on` |
+| POST | `/api/v2/groups/:id/commands/:command` | `{ "params": {} }` |
+| POST | `/api/v2/groups/:id/capabilities/:cap/:action` | e.g. `power/on` for a whole wall of mixed TVs |
+| POST | `/api/v2/scenes/:id` | |
+| POST | `/api/v2/agents/:id/apps/:name/restart` | |
 | WS | `/ws` | pushes `{ type: "state", state }` on every change |
+| WS | `/agent` | wall agents connect here |
 
-Scene step types: `wallPower` (optional `wall`), `wallInput`, `wallPreset`, `tune`, `boxKey`, `zoneSource`, `zoneGain`, `zoneMute`, `atlasScene`, `delay`.
+Bad requests return 400/404 with `{ "error": "..." }`. Commands to a device whose wall PC is offline return 503.
+
+Scene steps: `command` (with `device` or `group`), `delay`, and `waitFor` (a device state value, with a timeout).

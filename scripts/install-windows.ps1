@@ -18,28 +18,25 @@ if (-not $node) { throw "Node.js not found. Install Node 22 LTS or newer from no
 
 Push-Location $dir
 try {
-    Write-Host "Installing dependencies..."
-    npm ci --omit=dev
+    Write-Host "Installing dependencies and building the touch panel..."
+    npm ci
     if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
+    npm run build
+    if ($LASTEXITCODE -ne 0) { throw "building the touch panel failed" }
 
     $local = Join-Path $dir "config\system.local.json"
     $envFile = Join-Path $dir ".env"
     if (-not (Test-Path $local)) {
-        $cfg = Get-Content (Join-Path $dir "config\system.json") -Raw | ConvertFrom-Json
-        $cfg.simulate = $false
-        $cfg | ConvertTo-Json -Depth 20 | Set-Content $local
+        Copy-Item (Join-Path $dir "config\system.json") $local
         if (-not (Test-Path $envFile)) {
             @"
 # Secrets for the Blue Vue control server
 GRACENOTE_API_KEY=
-WALL1_TOKEN=
-WALL2_TOKEN=
-WALL3_TOKEN=
-WALL4_TOKEN=
 "@ | Set-Content $envFile
         }
         Write-Host "Created config\system.local.json and .env." -ForegroundColor Yellow
-        Write-Host "Fill in your walls, boxes, channels and Atlas IP, put the wall tokens in .env, then re-run this script."
+        Write-Host "Set the guide lineup in system.local.json and the Gracenote key in .env, then re-run this script."
+        Write-Host "On first start the server creates data\site.json from the example site; edit it for this venue."
         exit 0
     }
 
