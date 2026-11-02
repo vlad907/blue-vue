@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { api, useLiveState, type Ui } from "./api.ts";
+import { AdminApp } from "./admin/AdminApp.tsx";
 import { AppProvider } from "./context.tsx";
 import { Guide } from "./views/Guide.tsx";
 import { Rooms } from "./views/Rooms.tsx";
@@ -63,6 +64,7 @@ function App() {
           {offline > 0 && <span className="pill warn">{offline} offline</span>}
           {problems > 0 && <span className="pill bad">{problems} need setup</span>}
           {state.busy && <span className="pill warn">Running…</span>}
+          <a className="pill" href="/admin" title="Set up devices, walls and scenes">⚙ Admin</a>
         </div>
       </header>
       <nav>
@@ -80,7 +82,5 @@ function App() {
 }
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+  <StrictMode>{location.pathname.startsWith("/admin") ? <AdminApp /> : <App />}</StrictMode>,
 );

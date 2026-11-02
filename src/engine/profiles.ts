@@ -93,6 +93,15 @@ export class ProfileLibrary {
     return [];
   }
 
+  /** Custom profiles as written (before extends is resolved), for backups. */
+  customRaw(): Record<string, unknown>[] {
+    if (!existsSync(this.customDir)) return [];
+    return readdirSync(this.customDir)
+      .filter((f) => /\.(ya?ml|json)$/.test(f))
+      .map((f) => parseYaml(readFileSync(join(this.customDir, f), "utf8")))
+      .filter((d) => d && typeof d.id === "string");
+  }
+
   deleteCustom(id: string) {
     const entry = this.entries.get(id);
     if (!entry || entry.source !== "custom") throw new Error(`"${id}" is not a custom profile`);

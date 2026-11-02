@@ -83,6 +83,7 @@ export interface AgentView {
   online: boolean;
   paired: boolean;
   host?: string;
+  error?: string;
   apps: { name: string; running: boolean | null; error?: string }[];
 }
 

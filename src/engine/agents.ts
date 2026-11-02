@@ -38,6 +38,8 @@ export class AgentHub {
   private pending = new Map<number, { agent: string; resolve: (text?: string) => void; reject: (err: Error) => void; timer: NodeJS.Timeout }>();
   private nextReq = 1;
   private nextConn = 1;
+  // Agents that tried to connect but aren't in the site yet, with the token they offered.
+  private candidates = new Map<string, { token: string; host: string }>();
 
   // In simulation no agents dial in, so each one shows as online with a running wall app.
   constructor(private getAgents: () => AgentEntry[], private state: StateStore, private simulate = false) {
@@ -80,6 +82,7 @@ export class AgentHub {
         const entry = this.getAgents().find((a) => a.id === msg.id);
         if (!entry?.token || !sameToken(entry.token, msg.token)) {
           console.warn(`[agents] rejected agent "${msg.id}" from ${msg.host}: ${entry ? "wrong token" : "not in the site"}`);
+          if (typeof msg.token === "string" && msg.token.length >= 16) this.candidates.set(msg.id, { token: msg.token, host: msg.host });
           this.state.update((s) => {
             if (!s.agents[msg.id]) s.agents[msg.id] = { name: msg.id, online: false, paired: false, apps: [] };
             Object.assign(s.agents[msg.id], { host: msg.host, version: msg.version, lastSeen: new Date().toISOString(), error: entry ? "wrong token" : "not paired" });
@@ -150,6 +153,18 @@ export class AgentHub {
         break;
       }
     }
+  }
+
+  /** The token an unpaired agent offered, so an admin can approve it without retyping it. */
+  candidate(id: string) {
+    return this.candidates.get(id);
+  }
+
+  forgetCandidate(id: string) {
+    this.candidates.delete(id);
+    this.state.update((s) => {
+      if (s.agents[id] && !s.agents[id].paired) delete s.agents[id];
+    });
   }
 
   /** A connection to a device reached through the given agent. */

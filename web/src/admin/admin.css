@@ -1,0 +1,92 @@
+/* Admin: denser than the touch panel, built for a laptop or tablet. */
+.admin { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; user-select: text; }
+.sidebar { background: var(--panel); border-right: 1px solid var(--line); padding: 20px 14px; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; }
+.sidebar h1 { font-size: 18px; margin: 0; }
+.sidenav { display: flex; flex-direction: column; gap: 2px; margin: 20px 0; }
+.sidenav a { color: var(--muted); text-decoration: none; padding: 10px 12px; border-radius: 8px; font-weight: 600; display: flex; justify-content: space-between; }
+.sidenav a.active { background: var(--panel-2); color: var(--text); }
+.sidebar .back { margin-top: auto; text-decoration: none; }
+.badge-count { background: var(--warn); color: #1a1100; border-radius: 999px; padding: 0 7px; font-size: 12px; }
+.admin-main { padding: 20px 28px 140px; min-width: 0; }
+.admin-main h2 { margin-top: 4px; }
+.narrow { max-width: 900px; }
+.split { display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: start; }
+
+.btn.primary { background: var(--accent); border-color: var(--accent); }
+.btn.danger { border-color: var(--bad); color: #fca5a5; background: transparent; }
+.btn.small { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+a.btn { display: inline-block; text-decoration: none; color: var(--text); }
+.icon { background: none; border: 0; color: var(--muted); font-size: 16px; padding: 4px 8px; border-radius: 6px; }
+.icon:hover { color: var(--text); background: var(--panel-2); }
+.row-tight { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+.grow { flex: 1; }
+.clickable { cursor: pointer; }
+.bad-text { color: #fca5a5; }
+.section { font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 20px 0 8px; }
+
+.atable { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+.atable th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; padding: 8px; border-bottom: 1px solid var(--line); }
+.atable td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.atable tr.selected td { background: rgba(59,130,246,.08); }
+.atable td.actions { text-align: right; white-space: nowrap; }
+.atable td.actions .btn { margin-left: 6px; }
+.atable.compact td { padding: 4px 6px; }
+
+input[type="text"], input[type="number"], input[type="password"], select {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font: inherit; font-size: 14px; width: 100%;
+}
+input:disabled { opacity: .6; }
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.aform { display: flex; flex-direction: column; gap: 12px; margin: 8px 0; }
+.aform.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.aform.inline { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.afield { display: flex; flex-direction: column; gap: 5px; }
+.afield-label { font-size: 13px; font-weight: 600; }
+.req { color: var(--warn); margin-left: 3px; }
+.help { color: var(--muted); font-size: 12px; margin: 2px 0 6px; }
+.acheck { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.acheck input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+.listtable { display: flex; flex-direction: column; gap: 6px; }
+.lt-row { display: grid; gap: 6px; align-items: center; }
+.lt-head span { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+
+.drawer { width: min(460px, 92vw); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; position: sticky; top: 16px; max-height: calc(100vh - 140px); overflow-y: auto; }
+.drawer-actions { margin-top: 18px; }
+
+.members { padding-left: 22px; margin: 6px 0 10px; }
+.members li { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
+.card + .card, .card + p, .narrow > .card { margin-top: 12px; }
+.card.attention { border-color: var(--warn); }
+details.card summary { cursor: pointer; font-weight: 600; }
+.pick-list { max-height: 300px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px; margin-top: 8px; }
+
+.steps { list-style: none; padding: 0; margin: 12px 0; display: flex; flex-direction: column; gap: 10px; }
+.step { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.step-head { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.step-head select { width: auto; }
+
+pre.state { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 12px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow: auto; }
+.traffic { background: #05080f; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; height: 260px; overflow-y: auto; word-break: break-all; }
+.t-time { color: #55657f; }
+.t-dir { display: inline-block; width: 44px; font-weight: 700; }
+.t-tx .t-dir { color: #60a5fa; }
+.t-rx .t-dir { color: #4ade80; }
+.t-info .t-dir { color: var(--muted); }
+.t-error { color: #fca5a5; }
+
+.savebar { position: fixed; left: 220px; right: 0; bottom: 0; background: var(--panel-2); border-top: 2px solid var(--accent); padding: 12px 28px; z-index: 30; }
+.savebar-main { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-weight: 600; }
+.problems { margin: 8px 0 0; padding-left: 20px; color: #fca5a5; font-size: 13px; max-height: 140px; overflow-y: auto; }
+
+.overlay { position: fixed; inset: 0; background: rgba(5,8,15,.75); z-index: 50; display: flex; align-items: flex-start; justify-content: center; }
+.signin { max-width: 380px; margin: 12vh auto; display: flex; flex-direction: column; gap: 12px; }
+
+@media (max-width: 900px) {
+  .admin { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; }
+  .sidenav { flex-direction: row; flex-wrap: wrap; }
+  .split { grid-template-columns: 1fr; }
+  .drawer { position: static; width: auto; max-height: none; }
+  .savebar { left: 0; }
+}

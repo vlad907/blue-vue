@@ -143,6 +143,14 @@ export class SiteStore {
     return { errors: [], site: parsed.data };
   }
 
+  /** Puts a snapshot back as the current site (the current one is snapshotted first). */
+  restore(name: string) {
+    if (!/^site-[\w-]+\.json$/.test(name)) throw Object.assign(new Error("Invalid snapshot name"), { statusCode: 400 });
+    const file = join(this.snapshotDir, name);
+    if (!existsSync(file)) throw Object.assign(new Error(`No snapshot "${name}"`), { statusCode: 404 });
+    return this.save(JSON.parse(readFileSync(file, "utf8")));
+  }
+
   snapshots(): string[] {
     return existsSync(this.snapshotDir) ? readdirSync(this.snapshotDir).filter((f) => f.startsWith("site-")).sort().reverse() : [];
   }

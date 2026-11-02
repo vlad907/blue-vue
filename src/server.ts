@@ -4,6 +4,7 @@ import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import { z } from "zod";
+import { registerAdminRoutes } from "./admin/routes.ts";
 import type { Config } from "./config.ts";
 import type { Engine } from "./engine/index.ts";
 import type { Capabilities } from "./engine/profile-schema.ts";
@@ -25,11 +26,16 @@ export async function buildServer({ cfg, state, engine, guide }: Deps) {
 
   if (existsSync(WEB_DIST)) {
     await app.register(fastifyStatic, { root: WEB_DIST });
+    // The admin is the same single-page app, opened at /admin.
+    app.get("/admin", (_req, reply) => reply.sendFile("index.html"));
+    app.get("/admin/*", (_req, reply) => reply.sendFile("index.html"));
   } else {
     app.get("/", async (_req, reply) =>
       reply.type("text/html").send("<p>The touch panel hasn't been built yet. Run <code>npm run build</code>, or <code>npm run dev:web</code> while developing.</p>"),
     );
   }
+
+  registerAdminRoutes(app, cfg, engine);
 
   app.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
     const status = err instanceof z.ZodError ? 400 : (err.statusCode ?? 500);

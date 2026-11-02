@@ -46,7 +46,15 @@ The first run creates `config\system.local.json` and a `.env` file for secrets (
 
 ## Setting up a site
 
-Until the admin UI arrives, edit `data/site.json` (restart the server to apply) and use the profiles in `profiles/builtin/`:
+Open **`http://<control-pc-ip>:8080/admin`** (or **⚙ Admin** on the touch panel). On the first visit you choose the admin password. From there:
+- **Devices**: add a device by picking its type. The settings form comes from the device's profile. Choose whether it's reached from the control server or a wall PC. **Test** sends any command and shows the device's live traffic.
+- **Video walls**, **Rooms**, **Scenes** (step by step, with a Run button), **Channels** (with Gracenote lookup by ZIP code).
+- **Wall PCs**: a newly installed agent shows up under "Waiting for approval". Approve it, and it connects within 10 seconds.
+- **Backup**: download or restore the whole site and custom profiles, and roll back to any of the last 50 saves.
+
+Edits are collected and applied together with **Save & apply**. The server checks the whole site first, including that every scene step's command and values fit its device, and lists any problems instead of saving. Devices that changed restart; nothing else does.
+
+Device-specific notes:
 - **TCL Roku panels** (`tcl-roku-tv`): network control. On each TV, turn on Fast TV start, set Control by mobile apps to Permissive, turn off Auto power off, and set Power on to Last used input. Run `node src/agent.ts discover` on a wall PC to find them all.
 - **Xfinity boxes** (`xfinity-ir`): IR through a Global Caché iTach, with **one iTach port per box**. Identical boxes respond to the same codes, so if one emitter can reach two boxes, both will change channel. Learn codes once with `node src/agent.ts learn xfinity` on a wall PC, then put them in a custom profile that `extends: xfinity-ir` (see [docs/profiles.md](docs/profiles.md)).
 - **Atlas** (`atlas-atmosphere`): enable third-party control in Atmosphere. Zones, sources and scenes are numbered from 0, in Atmosphere's order. Changes made from Atmosphere wall panels show up live.

@@ -16,6 +16,10 @@ export interface Engine {
   agents: AgentHub;
   scenes: EngineSceneRunner;
   site(): Site;
+  /** Applies an already-saved site: restarts only devices that changed. */
+  apply(site: Site): void;
+  /** Re-reads profile files, then restarts devices whose profile changed. */
+  reloadProfiles(): void;
   stop(): void;
 }
 
@@ -37,6 +41,15 @@ export function startEngine(dataDir: string, state: StateStore, simulate: boolea
     agents,
     scenes: new EngineSceneRunner(() => site, devices, state),
     site: () => site,
+    apply(next) {
+      site = next;
+      devices.apply(site);
+      agents.syncViews();
+    },
+    reloadProfiles() {
+      profiles.load();
+      devices.apply(site);
+    },
     stop: () => {
       devices.stopAll();
       agents.close();

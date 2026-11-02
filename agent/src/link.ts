@@ -74,10 +74,10 @@ export class AgentLink {
       this.closeAll();
       if (this.stopped) return;
       if (wasConnected || ev.code === 4001) this.log(`disconnected (${ev.code}${ev.reason ? ` ${ev.reason}` : ""}); retrying`);
-      // A rejected token won't fix itself quickly; back off harder.
-      if (ev.code === 4001) this.backoffMs = 30_000;
+      // Rejected: wait for an admin to approve this agent, retrying every 10s.
+      if (ev.code === 4001) this.backoffMs = 10_000;
       this.timer = setTimeout(() => this.connect(), this.backoffMs);
-      this.backoffMs = Math.min(this.backoffMs * 2, 30_000);
+      if (ev.code !== 4001) this.backoffMs = Math.min(this.backoffMs * 2, 30_000);
     };
   }
 
