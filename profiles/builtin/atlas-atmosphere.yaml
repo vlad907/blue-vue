@@ -1,0 +1,112 @@
+id: atlas-atmosphere
+name: AtlasIED Atmosphere DSP
+manufacturer: AtlasIED
+model: AZM4 / AZM8 / AZMP
+category: audio
+description: >
+  Zone audio over Atmosphere third-party control (JSON-RPC over TCP 5321).
+  Enable third-party control in the Atmosphere web UI. Zone and source numbers
+  start at 0, in the order Atmosphere lists them.
+
+transport:
+  type: tcp
+  port: 5321
+  terminator: "\n"
+  minGapMs: 20
+
+settings:
+  - { key: host, label: IP address, type: string, required: true }
+  - key: zones
+    label: Zones
+    type: list
+    default: []
+    fields:
+      - { key: index, label: Zone number, type: integer, required: true }
+      - { key: name, label: Name, type: string, required: true }
+  - key: sources
+    label: Sources
+    type: list
+    default: []
+    fields:
+      - { key: index, label: Source number, type: integer, required: true }
+      - { key: name, label: Name, type: string, required: true }
+  - key: scenes
+    label: Atmosphere scenes
+    type: list
+    default: []
+    fields:
+      - { key: index, label: Scene number, type: integer, required: true }
+      - { key: name, label: Name, type: string, required: true }
+
+commands:
+  set_gain:
+    label: Set zone volume
+    params:
+      zone: { type: integer, label: Zone, optionsFrom: settings.zones }
+      db: { type: number, label: Volume (dB), min: -80, max: 0, step: 1 }
+    steps:
+      - send: '{"jsonrpc":"2.0","method":"set","params":{"param":"ZoneGain_{{zone}}","val":{{db}}}}'
+    sets: { "zones.{{zone}}.gain": "{{db}}" }
+  set_mute:
+    label: Mute zone
+    params:
+      zone: { type: integer, label: Zone, optionsFrom: settings.zones }
+      mute: { type: boolean, label: Muted }
+    steps:
+      - send: '{"jsonrpc":"2.0","method":"set","params":{"param":"ZoneMute_{{zone}}","val":{{mute | bool:1:0}}}}'
+    sets: { "zones.{{zone}}.mute": "{{mute}}" }
+  set_source:
+    label: Select zone source
+    params:
+      zone: { type: integer, label: Zone, optionsFrom: settings.zones }
+      source: { type: integer, label: Source, optionsFrom: settings.sources }
+    steps:
+      - send: '{"jsonrpc":"2.0","method":"set","params":{"param":"ZoneSource_{{zone}}","val":{{source}}}}'
+    sets: { "zones.{{zone}}.source": "{{source}}" }
+  recall_scene:
+    label: Recall Atmosphere scene
+    params:
+      scene: { type: integer, label: Scene, optionsFrom: settings.scenes }
+    steps:
+      - send: '{"jsonrpc":"2.0","method":"set","params":{"param":"RecallScene","val":{{scene}}}}'
+
+state:
+  "zones.*.gain": { type: number, label: Volume (dB) }
+  "zones.*.mute": { type: boolean, label: Muted }
+  "zones.*.source": { type: number, label: Source }
+
+# Atmosphere pushes "update" messages for subscribed parameters, sometimes
+# several in one message, so the regex runs for every match.
+feedback:
+  - regex: '"param"\s*:\s*"Zone(?<kind>Gain|Mute|Source)_(?<zone>\d+)"\s*,\s*"val"\s*:\s*(?<val>-?[\d.]+|true|false)'
+    set: { "zones.{{zone}}.{{kind | lower}}": "{{val}}" }
+
+onConnect:
+  - forEach: settings.zones
+    steps:
+      - send: '{"jsonrpc":"2.0","method":"sub","params":{"param":"ZoneGain_{{item.index}}","fmt":"val"}}'
+      - send: '{"jsonrpc":"2.0","method":"sub","params":{"param":"ZoneMute_{{item.index}}","fmt":"val"}}'
+      - send: '{"jsonrpc":"2.0","method":"sub","params":{"param":"ZoneSource_{{item.index}}","fmt":"val"}}'
+
+# Atmosphere drops idle connections.
+keepalive:
+  every: 30
+  steps:
+    - send: '{"jsonrpc":"2.0","method":"get","params":{"param":"ZoneGain_0"}}'
+
+capabilities:
+  volume: { set: set_gain, param: db, mute: set_mute }
+  source: { select: set_source, param: source }
+
+controls:
+  - type: group
+    repeat: settings.zones
+    label: "{{item.name}}"
+    controls:
+      - { type: select, label: Source, command: set_source, param: source, params: { zone: "{{item.index}}" }, state: "zones.{{item.index}}.source" }
+      - { type: slider, label: Volume, command: set_gain, param: db, params: { zone: "{{item.index}}" }, state: "zones.{{item.index}}.gain" }
+      - { type: toggle, label: Mute, command: set_mute, param: mute, params: { zone: "{{item.index}}" }, state: "zones.{{item.index}}.mute" }
+  - { type: presets, label: Scenes, command: recall_scene, param: scene }
+
+simulator:
+  state: {}

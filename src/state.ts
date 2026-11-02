@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { AppStatus, PanelStatus } from "./drivers/endpoints.ts";
+import type { DeviceView } from "./engine/device-manager.ts";
 
 export interface ZoneState {
   gainDb?: number;
@@ -18,6 +19,7 @@ export interface WallState {
 }
 
 export interface SystemState {
+  devices: Record<string, DeviceView>; // profile-driven devices (engine)
   walls: Record<string, WallState>;
   // IR is one-way, so box channels are the last commanded values, not confirmed.
   boxes: Record<string, { channel?: number; lastCommandAt?: string }>;
@@ -31,6 +33,7 @@ export interface SystemState {
 /** Holds live system state and emits "change" with the full state whenever it is patched. */
 export class StateStore extends EventEmitter {
   state: SystemState = {
+    devices: {},
     walls: {},
     boxes: {},
     atlas: { connected: false, zones: {} },

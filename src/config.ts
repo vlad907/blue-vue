@@ -67,6 +67,8 @@ export const ConfigSchema = z.object({
   site: z.string().default("Blue Vue"),
   server: z.object({ host: z.string().default("0.0.0.0"), port: z.number().int().default(8080) }).default({}),
   simulate: z.boolean().default(false),
+  // Holds site.json and custom profiles for the profile-driven engine.
+  dataDir: z.string().default("data"),
 
   ir: z.object({
     driver: z.enum(["lirc", "simulated"]).default("lirc"),

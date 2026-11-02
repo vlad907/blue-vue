@@ -1,12 +1,13 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import { z } from "zod";
 import type { Config } from "./config.ts";
 import { REMOTE_KEYS } from "./devices/cableBox.ts";
 import type { EndpointManager } from "./drivers/endpoints.ts";
+import type { Engine } from "./engine/index.ts";
 import type { GracenoteGuide } from "./guide/gracenote.ts";
 import type { Devices, SceneRunner } from "./scenes.ts";
 import type { StateStore } from "./state.ts";
@@ -18,9 +19,10 @@ interface Deps {
   scenes: SceneRunner;
   guide: GracenoteGuide;
   endpoints: EndpointManager;
+  engine?: Engine;
 }
 
-export async function buildServer({ cfg, state, devices, scenes, guide, endpoints }: Deps) {
+export async function buildServer({ cfg, state, devices, scenes, guide, endpoints, engine }: Deps) {
   const app = Fastify({ logger: { level: "warn" } });
   await app.register(fastifyWebsocket);
   await app.register(fastifyStatic, { root: join(dirname(fileURLToPath(import.meta.url)), "..", "web") });
@@ -125,6 +127,8 @@ export async function buildServer({ cfg, state, devices, scenes, guide, endpoint
     return { ok: true };
   });
 
+  if (engine) registerEngineRoutes(app, engine, state);
+
   // Live state push to every connected panel.
   app.get("/ws", { websocket: true }, (socket) => {
     const push = (s: unknown) => socket.send(JSON.stringify({ type: "state", state: s }));
@@ -134,4 +138,47 @@ export async function buildServer({ cfg, state, devices, scenes, guide, endpoint
   });
 
   return app;
+}
+
+/** v2 API over the profile-driven engine. Admin writes arrive with the admin UI (they need a login). */
+function registerEngineRoutes(app: FastifyInstance, engine: Engine, state: StateStore) {
+  const Params = z.object({ params: z.record(z.unknown()).default({}) });
+
+  app.get("/api/v2/profiles", async () =>
+    engine.profiles.list().map((e) => ({
+      id: e.profile?.id, name: e.profile?.name, category: e.profile?.category, manufacturer: e.profile?.manufacturer,
+      source: e.source, file: e.file, errors: e.errors,
+    })),
+  );
+
+  app.get("/api/v2/profiles/:id", async (req, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(req.params);
+    const profile = engine.profiles.get(id);
+    return profile ?? reply.status(404).send({ error: `Unknown profile "${id}"` });
+  });
+
+  app.get("/api/v2/site", async () => engine.site());
+  app.get("/api/v2/devices", async () => state.state.devices);
+
+  app.get("/api/v2/devices/:id/log", async (req) => {
+    const { id } = z.object({ id: z.string() }).parse(req.params);
+    return engine.devices.runtime(id).log;
+  });
+
+  app.post("/api/v2/devices/:id/commands/:command", async (req) => {
+    const { id, command } = z.object({ id: z.string(), command: z.string() }).parse(req.params);
+    await engine.devices.execute(id, command, Params.parse(req.body ?? {}).params);
+    return { ok: true };
+  });
+
+  app.post("/api/v2/groups/:id/commands/:command", async (req) => {
+    const { id, command } = z.object({ id: z.string(), command: z.string() }).parse(req.params);
+    await engine.devices.executeGroup(id, command, Params.parse(req.body ?? {}).params);
+    return { ok: true };
+  });
+
+  app.post("/api/v2/scenes/:id", async (req) => {
+    const { id } = z.object({ id: z.string() }).parse(req.params);
+    return engine.scenes.run(id);
+  });
 }

@@ -1,0 +1,55 @@
+id: tcl-google-tv
+name: TCL Google TV
+manufacturer: TCL
+model: Google TV models
+category: display
+description: >
+  Network control over ADB. On the TV, enable Developer options, then turn on
+  Network debugging. Accept the "Allow debugging" prompt the first time the
+  system connects (tick Always allow). Install Android platform-tools on the
+  machine that reaches the TV, and set ADB_PATH if adb isn't on PATH.
+
+transport:
+  type: adb
+  port: 5555
+  minGapMs: 200
+
+settings:
+  - { key: host, label: IP address, type: string, required: true }
+
+commands:
+  power_on:
+    label: Power on
+    # WAKEUP and SLEEP are discrete; KEYCODE_POWER would toggle.
+    steps: [{ adb: input keyevent KEYCODE_WAKEUP }]
+    sets: { power: "on" }
+  power_off:
+    label: Power off
+    steps: [{ adb: input keyevent KEYCODE_SLEEP }]
+    sets: { power: "off" }
+  input:
+    label: Select input
+    params:
+      input: { type: enum, label: Input, values: [hdmi1, hdmi2, hdmi3, hdmi4] }
+    steps: [{ adb: "input keyevent KEYCODE_TV_INPUT_HDMI_{{input | digits}}" }]
+
+state:
+  power: { type: enum, values: ["on", "off"], label: Power }
+
+polls:
+  - every: 15
+    steps: [{ adb: dumpsys power }]
+    parse:
+      - regex: 'mWakefulness=(\w+)'
+        set: { power: "{{value | map:Awake=on,*=off}}" }
+
+capabilities:
+  power: { on: power_on, off: power_off, state: power }
+  source: { select: input, param: input }
+
+controls:
+  - { type: toggle, label: Power, on: power_on, off: power_off, state: power }
+  - { type: select, label: Input, command: input, param: input }
+
+simulator:
+  state: { power: "off" }

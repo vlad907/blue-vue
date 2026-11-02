@@ -1,0 +1,76 @@
+id: xfinity-ir
+name: Xfinity cable box (IR)
+manufacturer: Comcast
+model: X1 / XiOne
+category: tuner
+description: >
+  Controls an Xfinity box over IR through a Global Caché iTach. Each box needs
+  its own iTach port and emitter. IR codes are learned once: duplicate this
+  profile and use Learn in the profile editor, or paste Pronto codes.
+
+transport:
+  type: ir
+  minGapMs: 120
+
+settings:
+  - { key: irHost, label: iTach IP address, type: string, required: true }
+  - { key: irPort, label: iTach IR port, type: integer, required: true, default: 1, help: "1-3 on an iTach IP2IR" }
+  - { key: digitDelayMs, label: Delay between digits (ms), type: integer, default: 350 }
+  - key: favorites
+    label: Favorite channels
+    type: list
+    default: []
+
+commands:
+  tune:
+    label: Tune channel
+    params:
+      channel: { type: integer, label: Channel, min: 1, max: 9999 }
+    steps:
+      - forEachChar: "{{channel}}"
+        steps:
+          - ir: "KEY_{{item}}"
+          - delay: "{{settings.digitDelayMs}}"
+      # OK tunes right away instead of waiting out the box's digit timeout.
+      - ir: KEY_OK
+    sets: { channel: "{{channel}}" }
+  key:
+    label: Remote button
+    params:
+      key:
+        type: enum
+        label: Button
+        values: [KEY_POWER, KEY_CHANNELUP, KEY_CHANNELDOWN, KEY_LAST, KEY_INFO, KEY_EPG, KEY_MENU, KEY_EXIT, KEY_OK,
+                 KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_PLAYPAUSE, KEY_REWIND, KEY_FASTFORWARD, KEY_RECORD,
+                 KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9]
+    steps:
+      - ir: "{{key}}"
+  channel_up:
+    label: Channel up
+    steps: [{ ir: KEY_CHANNELUP }]
+    sets: { channel: "" }
+  channel_down:
+    label: Channel down
+    steps: [{ ir: KEY_CHANNELDOWN }]
+    sets: { channel: "" }
+
+state:
+  # IR is one-way: this is the last channel sent, not a confirmed reading.
+  channel: { type: string, label: Channel (last sent) }
+
+# Fill these in by learning or pasting Pronto codes in a custom copy of this profile.
+irCodes: {}
+
+capabilities:
+  tuner: { tune: tune, param: channel, state: channel }
+
+controls:
+  - { type: status, label: Channel, state: channel }
+  - { type: presets, label: Favorites, command: tune, param: channel }
+  - { type: keypad, label: Tune, command: tune, param: channel }
+  - type: dpad
+    command: key
+    param: key
+    keys: { up: KEY_UP, down: KEY_DOWN, left: KEY_LEFT, right: KEY_RIGHT, ok: KEY_OK, back: KEY_LAST, menu: KEY_MENU, guide: KEY_EPG, exit: KEY_EXIT, info: KEY_INFO }
+  - { type: button, label: CH ▲, command: channel_up }
+  - { type: button, label: CH ▼, command: channel_down }

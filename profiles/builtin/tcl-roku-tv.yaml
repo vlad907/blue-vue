@@ -1,0 +1,65 @@
+id: tcl-roku-tv
+name: TCL Roku TV
+manufacturer: TCL
+model: Roku TV models
+category: display
+description: >
+  Network control through Roku External Control Protocol. On the TV, turn on
+  Settings > System > Power > Fast TV start, and set Settings > System >
+  Advanced system settings > Control by mobile apps > Network access to
+  Permissive. Turn off Auto power off, and set Power on to Last used input.
+
+transport:
+  type: http
+  port: 8060
+  minGapMs: 100
+
+settings:
+  - { key: host, label: IP address, type: string, required: true }
+
+commands:
+  power_on:
+    label: Power on
+    steps: [{ http: { method: POST, path: /keypress/PowerOn } }]
+    sets: { power: "on" }
+  power_off:
+    label: Power off
+    steps: [{ http: { method: POST, path: /keypress/PowerOff } }]
+    sets: { power: "off" }
+  input:
+    label: Select input
+    params:
+      input: { type: enum, label: Input, values: [hdmi1, hdmi2, hdmi3, hdmi4], labels: { hdmi1: HDMI 1, hdmi2: HDMI 2, hdmi3: HDMI 3, hdmi4: HDMI 4 } }
+    steps: [{ http: { method: POST, path: "/keypress/InputHDMI{{input | digits}}" } }]
+  key:
+    label: Remote button
+    params:
+      key: { type: enum, label: Button, values: [Home, Back, Select, Up, Down, Left, Right, Info, VolumeUp, VolumeDown, VolumeMute] }
+    steps: [{ http: { method: POST, path: "/keypress/{{key}}" } }]
+
+state:
+  power: { type: enum, values: ["on", "off"], label: Power }
+  model: { type: string, label: Model }
+  network: { type: string, label: Network }
+
+polls:
+  - every: 15
+    steps: [{ http: { method: GET, path: /query/device-info } }]
+    parse:
+      - xmlTag: power-mode
+        set: { power: "{{value | map:PowerOn=on,*=off}}" }
+      - xmlTag: model-name
+        set: { model: "{{value}}" }
+      - xmlTag: network-type
+        set: { network: "{{value}}" }
+
+capabilities:
+  power: { on: power_on, off: power_off, state: power }
+  source: { select: input, param: input }
+
+controls:
+  - { type: toggle, label: Power, on: power_on, off: power_off, state: power }
+  - { type: select, label: Input, command: input, param: input }
+
+simulator:
+  state: { power: "off" }

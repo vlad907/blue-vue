@@ -1,0 +1,47 @@
+id: generic-ir-tv
+name: Generic TV (IR)
+category: display
+description: >
+  Any TV controlled over IR through a Global Caché iTach. Use discrete
+  power-on and power-off codes, not the power toggle. Every TV that sees an IR
+  port's emitter reacts, so give each panel its own port if you need to control
+  them separately. Duplicate this profile and learn the codes for your model.
+
+transport:
+  type: ir
+  minGapMs: 150
+
+settings:
+  - { key: irHost, label: iTach IP address, type: string, required: true }
+  - { key: irPort, label: iTach IR port, type: integer, required: true, default: 1 }
+
+commands:
+  power_on:
+    label: Power on
+    steps: [{ ir: KEY_POWERON, repeat: 2 }]
+    sets: { power: "on" }
+  power_off:
+    label: Power off
+    steps: [{ ir: KEY_POWEROFF, repeat: 2 }]
+    sets: { power: "off" }
+  input:
+    label: Select input
+    params:
+      input: { type: enum, label: Input, values: [hdmi1, hdmi2, hdmi3, hdmi4] }
+    steps: [{ ir: "KEY_{{input | upper}}" }]
+
+state:
+  power: { type: enum, values: ["on", "off"], label: Power (last sent) }
+
+irCodes: {}
+
+capabilities:
+  power: { on: power_on, off: power_off, state: power }
+  source: { select: input, param: input }
+
+controls:
+  - { type: toggle, label: Power, on: power_on, off: power_off, state: power }
+  - { type: select, label: Input, command: input, param: input }
+
+simulator:
+  state: { power: "off" }
