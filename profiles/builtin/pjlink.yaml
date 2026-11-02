@@ -1,0 +1,69 @@
+id: pjlink
+name: Projector (PJLink)
+category: projector
+description: >
+  Any projector or display that supports PJLink class 1 (Epson, NEC, Panasonic,
+  Sony, Hitachi, Christie and many more), over TCP port 4352. Turn on PJLink
+  (often called "network control" or "PJLink") in the projector's network
+  menu and turn PJLink authentication off.
+
+transport:
+  type: tcp
+  port: 4352
+  terminator: "\r"
+  delimiter: "\r"
+  minGapMs: 100
+
+settings:
+  - { key: host, label: IP address, type: string, required: true }
+
+commands:
+  power_on:
+    label: Power on
+    steps: [{ send: "%1POWR 1" }]
+  power_off:
+    label: Power off
+    steps: [{ send: "%1POWR 0" }]
+  input:
+    label: Select input
+    params:
+      input:
+        type: enum
+        label: Input
+        values: ["31", "32", "33", "11", "12", "21", "51"]
+        labels: { "31": HDMI 1, "32": HDMI 2, "33": HDMI 3, "11": Computer 1, "12": Computer 2, "21": Video, "51": Network }
+    steps: [{ send: "%1INPT {{input}}" }]
+  av_mute:
+    label: Picture and sound mute
+    params:
+      mute: { type: boolean, label: Muted }
+    steps: [{ send: "%1AVMT {{mute | bool:31:30}}" }]
+
+state:
+  power: { type: enum, values: ["on", "off", "cooling", "warming"], label: Power }
+  input: { type: string, label: Input }
+  muted: { type: boolean, label: Muted }
+
+feedback:
+  - regex: '%1POWR=(\d)'
+    set: { power: "{{value | map:0=off,1=on,2=cooling,3=warming}}" }
+  - regex: '%1INPT=(\d\d)'
+    set: { input: "{{value}}" }
+  - regex: '%1AVMT=(3[01])'
+    set: { muted: "{{value | map:31=true,*=false}}" }
+
+polls:
+  - every: 10
+    steps:
+      - send: "%1POWR ?"
+      - send: "%1INPT ?"
+
+capabilities:
+  power: { on: power_on, off: power_off, state: power }
+  source: { select: input, param: input, state: input }
+
+controls:
+  - { type: toggle, label: Power, on: power_on, off: power_off, state: power }
+  - { type: status, label: Status, state: power }
+  - { type: select, label: Input, command: input, param: input, state: input }
+  - { type: toggle, label: Picture mute, command: av_mute, param: mute, state: muted }

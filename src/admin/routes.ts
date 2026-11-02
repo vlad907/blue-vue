@@ -6,6 +6,7 @@ import type { Engine } from "../engine/index.ts";
 import { type Site, SiteSchema } from "../engine/site.ts";
 import { lintScenes } from "../engine/site-lint.ts";
 import { AdminAuth, COOKIE, readCookie, sessionCookie } from "./auth.ts";
+import { registerProfileRoutes } from "./profile-routes.ts";
 
 const hashOf = (site: Site) => createHash("sha256").update(JSON.stringify(site)).digest("hex").slice(0, 16);
 
@@ -61,6 +62,8 @@ export function registerAdminRoutes(app: FastifyInstance, cfg: Config, engine: E
     admin.addHook("onRequest", async (req) => {
       if (!auth.valid(sessionOf(req))) throw fail(401, "Sign in to the admin first");
     });
+
+    registerProfileRoutes(admin, engine);
 
     admin.post("/api/admin/password", async (req, reply) => {
       const { current, next } = z.object({ current: z.string(), next: z.string() }).parse(req.body);

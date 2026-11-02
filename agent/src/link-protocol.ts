@@ -36,6 +36,8 @@ export type ServerToAgent =
   | { type: "conn.open"; connId: string; transport: TransportConfig; settings: Record<string, unknown> }
   | { type: "conn.close"; connId: string }
   | { type: "conn.send"; connId: string; reqId: number; payload: WirePayload }
-  | { type: "app.restart"; reqId: number; name: string };
+  | { type: "app.restart"; reqId: number; name: string }
+  // Puts an iTach near this wall into learning mode; the reply text is the learned sendir code.
+  | { type: "ir.learn"; reqId: number; host: string; port?: number; timeoutMs: number };
 
 export const PROTOCOL_VERSION = "1";

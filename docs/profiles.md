@@ -1,6 +1,16 @@
 # Writing device profiles
 
-A **profile** describes a type of device: how to reach it, the commands it accepts, how to read its state, and which controls to show. Adding a new kind of device means writing a profile, not code. Once you have a profile, add any number of **devices** that use it.
+A **profile** (shown as a "device type" in the admin) describes a type of device: how to reach it, the commands it accepts, how to read its state, and which controls to show. Adding a new kind of device means writing a profile, not code. Once you have a profile, add any number of **devices** that use it.
+
+**The easiest way is the admin: Device types → New device type.** Start from a template (TCP, HTTP, serial or IR), then fill in the tabs:
+- **Commands:** each command has a **Try it** box that shows exactly what it would send.
+- **Feedback & polling:** reply rules have a **Test** box. Paste a sample reply and see what state it produces.
+- **IR codes:** a **Learn** button captures codes from the original remote through an iTach.
+- **YAML:** covers anything the forms don't, and lets you import or export a profile as a file.
+
+Problems are listed as you type, and saving restarts any devices that use the profile. To change a built-in profile, **Duplicate** it first.
+
+This page describes the file format behind the editor.
 
 - Built-in profiles live in `profiles/builtin/`. They ship with Blue Vue and are read-only.
 - Your own profiles go in `data/profiles/`. A custom profile with the same `id` as a built-in replaces it.
@@ -14,6 +24,7 @@ A **profile** describes a type of device: how to reach it, the commands it accep
   ```
 
 Examples to copy from:
+- `pjlink.yaml`: TCP, with polling and reply rules (a good first read)
 - `tcl-roku-tv.yaml`: HTTP, with polling
 - `atlas-atmosphere.yaml`: TCP, with subscriptions and pushed updates
 - `xfinity-ir.yaml`: IR, with a multi-step tune command

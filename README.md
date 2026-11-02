@@ -1,10 +1,10 @@
 # Blue Vue Control
 
-A touch-panel control system for venues: video walls of TVs, Xfinity boxes with a TV guide, an AtlasIED Atmosphere DSP, and video wall layout presets. **Scenes** combine everything into one button, for example "Open Venue" or "Game Day".
+A touch-panel control system for venues: video walls of TVs, Xfinity boxes with a TV guide, an AtlasIED Atmosphere DSP, and what each video wall shows, through the mosaic engine. **Scenes** combine everything into one button, for example "Open Venue" or "Game Day".
 
 Every device is described by a **profile**: a YAML file listing its commands, how to read its state, and which controls to show. The touch panel builds itself from those profiles. Adding a new kind of device means writing a profile, not code (see [docs/profiles.md](docs/profiles.md)).
 
-Built-in profiles: AtlasIED Atmosphere, Xfinity box (IR via iTach), TCL Roku TV, TCL Google TV, generic IR TV, and an HTTP video wall controller (a placeholder until that API's schema is final).
+Built-in profiles: the mosaic engine (video wall content), AtlasIED Atmosphere, Xfinity box (IR via iTach), TCL Roku TV, TCL Google TV, generic IR TV, and any PJLink projector. New device types are made in the admin's **Device types** editor, with no code.
 
 ## How it fits together
 
@@ -50,6 +50,7 @@ Open **`http://<control-pc-ip>:8080/admin`** (or **⚙ Admin** on the touch pane
 - **Devices**: add a device by picking its type. The settings form comes from the device's profile. Choose whether it's reached from the control server or a wall PC. **Test** sends any command and shows the device's live traffic.
 - **Video walls**, **Rooms**, **Scenes** (step by step, with a Run button), **Channels** (with Gracenote lookup by ZIP code).
 - **Wall PCs**: a newly installed agent shows up under "Waiting for approval". Approve it, and it connects within 10 seconds.
+- **Device types**: create and edit profiles in forms. **Try it** shows exactly what a command sends, **Test** checks a reply rule against a sample, and **Learn** captures IR codes from a remote through an iTach (from the server or any wall PC). Built-ins are read-only; Duplicate one to adapt it.
 - **Backup**: download or restore the whole site and custom profiles, and roll back to any of the last 50 saves.
 
 Edits are collected and applied together with **Save & apply**. The server checks the whole site first, including that every scene step's command and values fit its device, and lists any problems instead of saving. Devices that changed restart; nothing else does.
@@ -58,7 +59,8 @@ Device-specific notes:
 - **TCL Roku panels** (`tcl-roku-tv`): network control. On each TV, turn on Fast TV start, set Control by mobile apps to Permissive, turn off Auto power off, and set Power on to Last used input. Run `node src/agent.ts discover` on a wall PC to find them all.
 - **Xfinity boxes** (`xfinity-ir`): IR through a Global Caché iTach, with **one iTach port per box**. Identical boxes respond to the same codes, so if one emitter can reach two boxes, both will change channel. Learn codes once with `node src/agent.ts learn xfinity` on a wall PC, then put them in a custom profile that `extends: xfinity-ir` (see [docs/profiles.md](docs/profiles.md)).
 - **Atlas** (`atlas-atmosphere`): enable third-party control in Atmosphere. Zones, sources and scenes are numbered from 0, in Atmosphere's order. Changes made from Atmosphere wall panels show up live.
-- **Video walls**: a group with `"kind": "wall"` whose devices are the panels. The Video Walls tab shows each wall's panels, and its PC and mosaic software status.
+- **Video walls (panels)**: a group with `"kind": "wall"` whose devices are the panels. The Video Walls tab shows each wall's panels, and its PC and mosaic software status.
+- **Mosaic engine** (`mosaic-engine`): add one device pointing at the media server (port 8090), and enter the API key if one is set in the mosaic editor (Settings → Access). Walls ("groups"), their presets, scenes and NDI streams are read from the engine every 3 seconds, so presets made in the mosaic editor appear on the Video Walls tab on their own, with the active preset highlighted. Each wall gets preset buttons, a "show one stream" picker and Blank. In scenes, use "Recall wall preset" (pick the wall, then its preset, with a crossfade time). The wall agents' local health check uses port 8095, so the agent can run on the media server without clashing with the engine's port 8090.
 
 ### TV guide (Gracenote)
 ```bash

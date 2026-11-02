@@ -1,6 +1,6 @@
 {
   "name": "wall1",
-  "port": 8090,
+  "port": 8095,
   "token": "CHANGE-ME-to-a-long-random-string",
   "simulate": false,
   "server": {

@@ -80,30 +80,12 @@
       }
     },
     {
-      "id": "videowall",
-      "name": "Video wall processor",
-      "profile": "video-wall-http",
+      "id": "mosaic",
+      "name": "Mosaic engine",
+      "profile": "mosaic-engine",
       "room": "rack",
       "settings": {
-        "host": "10.0.10.60",
-        "presets": [
-          {
-            "id": "full",
-            "name": "Full Wall"
-          },
-          {
-            "id": "split",
-            "name": "Side by Side"
-          },
-          {
-            "id": "quad",
-            "name": "Quad"
-          },
-          {
-            "id": "main-plus-2",
-            "name": "Main + 2"
-          }
-        ]
+        "host": "10.0.10.60"
       }
     },
     {
@@ -288,10 +270,12 @@
         },
         {
           "type": "command",
-          "device": "videowall",
+          "device": "mosaic",
           "command": "recall_preset",
           "params": {
-            "preset": "full"
+            "group": "main-wall",
+            "preset": "camera-1-full",
+            "transitionMs": 500
           }
         },
         {
@@ -338,10 +322,12 @@
       "steps": [
         {
           "type": "command",
-          "device": "videowall",
+          "device": "mosaic",
           "command": "recall_preset",
           "params": {
-            "preset": "quad"
+            "group": "main-wall",
+            "preset": "quad",
+            "transitionMs": 500
           }
         },
         {

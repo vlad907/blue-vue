@@ -47,10 +47,12 @@ export class DeviceRuntime extends EventEmitter {
   private timers: NodeJS.Timeout[] = [];
   private keepaliveTimer?: NodeJS.Timeout;
 
-  constructor(readonly device: DeviceConfig, readonly profile: Profile, factory: ConnectionFactory) {
+  // noDelays: skip waits, for previews that render a command without sending it.
+  constructor(readonly device: DeviceConfig, readonly profile: Profile, factory: ConnectionFactory, private opts: { noDelays?: boolean } = {}) {
     super();
-    Object.assign(this.state, profile.simulator.state ?? {});
     this.conn = factory(profile, { ...device.settings }, device.location);
+    // Example state is for simulation only; real devices start empty until they report.
+    if (this.conn instanceof SimulatedConnection) Object.assign(this.state, structuredClone(profile.simulator.state ?? {}));
     this.conn.on("log", (dir, text) => this.addLog(dir, text));
     this.conn.on("data", (msg: string) => this.applyUpdates(applyRules(this.profile.feedback, msg, this.context())));
     this.conn.on("status", (online: boolean) => this.onStatus(online));
@@ -118,7 +120,7 @@ export class DeviceRuntime extends EventEmitter {
   private async runSteps(steps: Step[], ctx: Context, depth: number, parse?: ParseRule[]) {
     for (const step of steps) {
       if ("delay" in step) {
-        await sleep(Number(renderValue(String(step.delay), ctx)));
+        if (!this.opts.noDelays) await sleep(Number(renderValue(String(step.delay), ctx)));
       } else if ("forEachChar" in step) {
         for (const ch of render(step.forEachChar, ctx)) await this.runSteps(step.steps, { ...ctx, item: ch }, depth, parse);
       } else if ("forEach" in step) {
@@ -156,7 +158,7 @@ export class DeviceRuntime extends EventEmitter {
         method: step.http.method,
         path: render(step.http.path, ctx),
         body: step.http.body === undefined ? undefined : render(step.http.body, ctx),
-        headers: step.http.headers,
+        headers: renderHeaders(step.http.headers, ctx),
       };
     }
     if (step.ir !== undefined) {
@@ -174,7 +176,7 @@ export class DeviceRuntime extends EventEmitter {
   private enqueue(p: RenderedPayload): Promise<string | undefined> {
     const job = this.queue.then(async () => {
       const reply = await this.conn.send(p);
-      await sleep(this.profile.transport.minGapMs);
+      if (!this.opts.noDelays) await sleep(this.profile.transport.minGapMs);
       return reply;
     });
     this.queue = job.catch(() => {});
@@ -200,6 +202,17 @@ export class DeviceRuntime extends EventEmitter {
     if (dir === "error") this.error = text;
     this.emit("log", entry);
   }
+}
+
+/** Header values are templates (e.g. an API key from settings); headers that render empty are left out. */
+function renderHeaders(headers: Record<string, string> | undefined, ctx: Context) {
+  if (!headers) return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    const value = render(v, ctx);
+    if (value) out[k] = value;
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** Checks and converts command params against the profile's declarations. */

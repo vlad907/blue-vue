@@ -8,6 +8,7 @@ export const BUILTIN_PROFILES = join(import.meta.dirname, "..", "..", "profiles"
 
 export interface ProfileEntry {
   profile?: Profile;
+  raw?: Record<string, unknown>; // as written in the file, before `extends` is applied
   source: "builtin" | "custom";
   file: string;
   errors: string[];
@@ -49,18 +50,22 @@ export class ProfileLibrary {
         const merged = resolveExtends(id, raw);
         const result = ProfileSchema.safeParse(merged);
         if (!result.success) {
-          this.entries.set(id, { source: r.source, file: r.file, errors: result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) });
+          this.entries.set(id, { raw: r.data, source: r.source, file: r.file, errors: result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) });
         } else {
           const errors = lint(result.data);
-          this.entries.set(id, { profile: errors.length ? undefined : result.data, source: r.source, file: r.file, errors });
+          this.entries.set(id, { profile: errors.length ? undefined : result.data, raw: r.data, source: r.source, file: r.file, errors });
         }
       } catch (err) {
-        this.entries.set(id, { source: r.source, file: r.file, errors: [err instanceof Error ? err.message : String(err)] });
+        this.entries.set(id, { raw: r.data, source: r.source, file: r.file, errors: [err instanceof Error ? err.message : String(err)] });
       }
     }
     for (const b of broken) this.entries.set(`!${b.file}`, b);
     for (const [id, e] of this.entries) if (e.errors.length) console.warn(`[profiles] ${id}: ${e.errors.join("; ")}`);
     return this;
+  }
+
+  entry(id: string): ProfileEntry | undefined {
+    return this.entries.get(id);
   }
 
   get(id: string): Profile | undefined {
@@ -72,7 +77,8 @@ export class ProfileLibrary {
   }
 
   /** Validates and saves a custom profile, then reloads. Returns problems instead of saving if invalid. */
-  saveCustom(data: Record<string, unknown>): string[] {
+  /** Checks a profile as written (resolving `extends` against the library) without saving it. */
+  validate(data: Record<string, unknown>): { errors: string[]; profile?: Profile } {
     const id = String(data.id ?? "");
     const all = new Map([...this.entries].filter(([, e]) => e.profile).map(([k, e]) => [k, { data: e.profile as unknown as Record<string, unknown>, source: e.source, file: e.file }]));
     all.set(id, { data, source: "custom", file: "" });
@@ -80,11 +86,18 @@ export class ProfileLibrary {
     try {
       merged = resolveExtends(id, all);
     } catch (err) {
-      return [err instanceof Error ? err.message : String(err)];
+      return { errors: [err instanceof Error ? err.message : String(err)] };
     }
     const result = ProfileSchema.safeParse(merged);
-    if (!result.success) return result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
+    if (!result.success) return { errors: result.error.issues.map((i) => `${i.path.join(".") || "profile"}: ${i.message}`) };
     const errors = lint(result.data);
+    return errors.length ? { errors } : { errors: [], profile: result.data };
+  }
+
+  saveCustom(data: Record<string, unknown>): string[] {
+    const id = String(data.id ?? "");
+    if (this.entries.get(id)?.source === "builtin") return [`"${id}" is a built-in profile; save your version under a new id`];
+    const { errors } = this.validate(data);
     if (errors.length) return errors;
 
     mkdirSync(this.customDir, { recursive: true });
@@ -138,7 +151,11 @@ export function lint(p: Profile): string[] {
       if (s.command && !commandNames.has(s.command)) errors.push(`${where}: unknown command "${s.command}"`);
       if (s.steps) walk(s.steps, where);
       for (const k of ["send", "hex", "ir", "adb", "forEachChar"]) if (typeof s[k] === "string") templates.push([where, s[k]]);
-      if (s.http) templates.push([where, s.http.path], ...(s.http.body ? [[where, s.http.body] as [string, string]] : []));
+      if (s.http) {
+        templates.push([where, s.http.path]);
+        if (s.http.body) templates.push([where, s.http.body]);
+        for (const h of Object.values((s.http.headers ?? {}) as Record<string, string>)) templates.push([where, h]);
+      }
       const kind = s.send !== undefined || s.hex !== undefined ? "text" : s.http ? "http" : s.ir !== undefined ? "ir" : s.adb !== undefined ? "adb" : s.wol ? "wol" : undefined;
       if (kind) {
         const t = p.transport.type;

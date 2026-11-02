@@ -29,7 +29,7 @@ export function Walls() {
 
       {layoutDevices.map((d) => {
         const profile = ui.profiles[d.profile];
-        const layout = profile.controls.filter((c) => c.type === "presets");
+        const layout = profile.controls.filter((c) => c.type === "presets" || c.type === "group");
         return (
           <div key={d.id}>
             <h2>{d.name}</h2>

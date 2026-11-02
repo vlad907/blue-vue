@@ -16,6 +16,8 @@ interface DraftValue {
   save: () => Promise<boolean>;
   discard: () => void;
   reload: () => Promise<void>;
+  /** Re-fetches profiles only, keeping unsaved site edits. */
+  reloadProfiles: () => Promise<void>;
   profiles: Record<string, Profile>;
   profileEntries: ProfileEntry[];
   notice: (text: string, error?: boolean) => void;
@@ -46,17 +48,22 @@ export function DraftProvider({ children }: { children: ReactNode }) {
     window.setTimeout(() => setToast(undefined), error ? 6000 : 2500);
   }, []);
 
-  const reload = useCallback(async () => {
-    const [s, entries] = await Promise.all([adminApi.site(), adminApi.profiles()]);
-    setSaved(s);
-    setSite(structuredClone(s.site));
-    setProblems([]);
-    setConflict(false);
+  const reloadProfiles = useCallback(async () => {
+    const entries = await adminApi.profiles();
     setProfileEntries(entries);
     const valid = entries.filter((e) => e.id && !e.errors.length);
     const loaded = await Promise.all(valid.map((e) => adminApi.profile(e.id!)));
     setProfiles(Object.fromEntries(loaded.map((p) => [p.id, p])));
   }, []);
+
+  const reload = useCallback(async () => {
+    const s = await adminApi.site();
+    setSaved(s);
+    setSite(structuredClone(s.site));
+    setProblems([]);
+    setConflict(false);
+    await reloadProfiles();
+  }, [reloadProfiles]);
 
   useEffect(() => {
     reload().catch((err) => notice(err.message, true));
@@ -111,6 +118,7 @@ export function DraftProvider({ children }: { children: ReactNode }) {
           setProblems([]);
         },
         reload,
+        reloadProfiles,
         profiles,
         profileEntries,
         notice,

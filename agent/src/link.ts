@@ -1,4 +1,5 @@
 import { hostname } from "node:os";
+import { learnOnce } from "./learn.ts";
 import type { AgentToServer, ServerToAgent, WirePayload } from "./link-protocol.ts";
 import { type Connection, type RenderedPayload, createConnection } from "./transports/index.ts";
 
@@ -108,6 +109,14 @@ export class AgentLink {
         }
         break;
       }
+      case "ir.learn":
+        try {
+          const code = await learnOnce(msg.host, msg.timeoutMs, msg.port);
+          this.send({ type: "reply", reqId: msg.reqId, ok: true, text: code });
+        } catch (err) {
+          this.send({ type: "reply", reqId: msg.reqId, ok: false, error: err instanceof Error ? err.message : String(err) });
+        }
+        break;
       case "app.restart":
         try {
           if (!this.opts.apps) throw new Error("this agent watches no apps");

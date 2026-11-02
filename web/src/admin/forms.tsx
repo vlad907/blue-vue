@@ -43,6 +43,10 @@ export function Pick<T extends string | number>({ value, options, onChange, empt
       }}
     >
       {(value === undefined || empty !== undefined) && <option value="">{empty ?? "Choose…"}</option>}
+      {/* A saved value missing from the list (renamed preset, device offline) stays visible instead of being hidden. */}
+      {value !== undefined && String(value) !== "" && !options.some((o) => String(o.value) === String(value)) && (
+        <option value={String(value)}>{String(value)} (not currently available)</option>
+      )}
       {options.map((o) => (
         <option key={String(o.value)} value={String(o.value)}>{o.label}</option>
       ))}
@@ -148,20 +152,25 @@ function SimpleList({ value, onChange }: { value: unknown[]; onChange: (v: unkno
 }
 
 /** Inputs for a command's params; dropdowns are filled from device settings where the profile says so. */
-export function ParamsForm({ params, value, onChange, settings }: { params: Record<string, Param>; value: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; settings?: Record<string, unknown> }) {
+export function ParamsForm({ params, value, onChange, settings, state }: { params: Record<string, Param>; value: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; settings?: Record<string, unknown>; state?: Record<string, unknown> }) {
   const entries = Object.entries(params);
   if (!entries.length) return null;
-  const set = (k: string, v: unknown) => onChange({ ...value, [k]: v });
+  // Changing a value clears the ones whose choices depend on it (e.g. a preset when the wall changes).
+  const set = (k: string, v: unknown) => {
+    const next: Record<string, unknown> = { ...value, [k]: v };
+    for (const [other, op] of entries) if (op.optionsFrom?.includes(`{{${k}}}`)) delete next[other];
+    onChange(next);
+  };
   return (
     <div className="aform inline">
       {entries.map(([name, p]) => {
         const label = p.label ?? name;
-        const list = p.optionsFrom && settings ? (settings[p.optionsFrom.replace(/^settings\./, "")] as unknown[] | undefined) : undefined;
+        const list = p.optionsFrom ? optionsList(p.optionsFrom, value, settings, state) : undefined;
         let input: ReactNode;
         if (Array.isArray(list) && list.length) {
           const options = list.map((it) => {
             const o = (it && typeof it === "object" ? it : { value: it, name: it }) as Record<string, unknown>;
-            const v = (o.index ?? o.id ?? o.value) as string | number;
+            const v = (o.index ?? o.id ?? o.value ?? o.name) as string | number;
             return { value: v, label: `${o.name ?? v}` };
           });
           input = <Pick value={value[name] as string | number | undefined} options={options} onChange={(v) => set(name, v)} />;
@@ -183,6 +192,17 @@ export function ParamsForm({ params, value, onChange, settings }: { params: Reco
       })}
     </div>
   );
+}
+
+/**
+ * The list a param's choices come from: a settings list ("settings.zones") or
+ * live device state ("state.groupList", "state.groups.{{group}}.presets",
+ * where {{group}} is the value already chosen for the "group" param).
+ */
+function optionsList(path: string, values: Record<string, unknown>, settings?: Record<string, unknown>, state?: Record<string, unknown>) {
+  const resolved = path.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => String(values[k] ?? ""));
+  if (resolved.startsWith("state.")) return state?.[resolved.slice(6)] as unknown[] | undefined;
+  return settings?.[resolved.replace(/^settings\./, "")] as unknown[] | undefined;
 }
 
 /** Default settings for a newly chosen profile, keeping values that still apply. */

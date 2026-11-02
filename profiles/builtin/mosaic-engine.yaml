@@ -1,0 +1,155 @@
+id: mosaic-engine
+name: Mosaic engine (video walls)
+category: video-wall
+description: >
+  The mosaic engine on the media server, which drives every video wall
+  ("group") and its receiving wall PCs. Groups, presets, scenes and NDI
+  streams are read live from the engine, so presets made in the mosaic
+  editor show up here by themselves. Port 8090 must be open on the media
+  server. If an API key is set in the editor (Settings > Access), enter it here.
+
+transport:
+  type: http
+  port: 8090
+  minGapMs: 0
+
+settings:
+  - { key: host, label: Media server IP address, type: string, required: true }
+  - { key: port, label: Port, type: integer, default: 8090 }
+  - { key: apiKey, label: API key, type: string, help: "Only if one is set in the mosaic editor" }
+
+commands:
+  recall_preset:
+    label: Recall wall preset
+    params:
+      group: { type: string, label: Wall, optionsFrom: state.groupList }
+      preset: { type: string, label: Preset, optionsFrom: "state.groups.{{group}}.presets" }
+      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 500 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/walls/{{group}}/presets/{{preset}}/recall"
+          body: '{"transitionMs": {{transitionMs}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+    sets: { "groups.{{group}}.activePreset": "{{preset}}" }
+
+  show_stream:
+    label: Show a stream on a whole wall
+    params:
+      group: { type: string, label: Wall, optionsFrom: state.groupList }
+      ndiName: { type: string, label: NDI stream, optionsFrom: state.streams }
+      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 500 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/walls/{{group}}/show"
+          body: '{"ndiName": {{ndiName | json}}, "transitionMs": {{transitionMs}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+    sets: { "groups.{{group}}.activePreset": "", "groups.{{group}}.stream": "{{ndiName}}" }
+
+  clear:
+    label: Blank a wall
+    params:
+      group: { type: string, label: Wall, optionsFrom: state.groupList }
+      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 500 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/walls/{{group}}/clear"
+          body: '{"transitionMs": {{transitionMs}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+    sets: { "groups.{{group}}.activePreset": "", "groups.{{group}}.stream": "" }
+
+  recall_scene:
+    label: Recall scene (all walls)
+    params:
+      scene: { type: string, label: Scene, optionsFrom: state.sceneList }
+      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 1000 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/scenes/{{scene}}/recall"
+          body: '{"transitionMs": {{transitionMs}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+
+  activate_layout:
+    label: Switch room layout
+    params:
+      layout: { type: string, label: Layout, optionsFrom: state.layoutList }
+      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 1000 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/layouts/{{layout}}/activate"
+          body: '{"transitionMs": {{transitionMs}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+
+state:
+  layout: { type: string, label: Room layout }
+  "groups.*.activePreset": { type: string, label: Preset on }
+  "groups.*.name": { type: string, label: Wall name }
+  "endpoints.*.online": { type: boolean, label: Wall PC online }
+
+# One request describes everything; read it every few seconds. Lists are kept
+# whole (for the panel's buttons) and per group (for "which preset is on").
+polls:
+  - every: 3
+    steps: [{ http: { method: GET, path: /api/control } }]
+    parse:
+      - jsonPath: $.groups
+        set: { groupList: "{{value}}" }
+      - jsonPath: "$.groups[*]"
+        set:
+          "groups.{{value.id}}.name": "{{value.name}}"
+          "groups.{{value.id}}.activePreset": "{{value.activePreset}}"
+          "groups.{{value.id}}.presets": "{{value.presets}}"
+          "groups.{{value.id}}.noSignal": "{{value.noSignal}}"
+      - jsonPath: $.scenes
+        set: { sceneList: "{{value}}" }
+      - jsonPath: $.layouts
+        set: { layoutList: "{{value}}" }
+      - jsonPath: $.layout.name
+        set: { layout: "{{value}}" }
+      - jsonPath: $.ndi.streams
+        set: { streams: "{{value}}" }
+      - jsonPath: $.endpoints
+        set: { endpointList: "{{value}}" }
+      - jsonPath: "$.endpoints[*]"
+        set:
+          "endpoints.{{value.id}}.online": "{{value.online}}"
+          "endpoints.{{value.id}}.displaysOk": "{{value.displaysOk}}"
+          "endpoints.{{value.id}}.displays": "{{value.displays}}"
+
+capabilities:
+  layoutPresets: { recall: recall_preset, param: preset, optionsFrom: state.groupList }
+
+controls:
+  - type: group
+    repeat: state.groupList
+    label: "{{item.name}}"
+    controls:
+      - { type: presets, label: Presets, command: recall_preset, param: preset, params: { group: "{{item.id}}" }, options: item.presets, state: "groups.{{item.id}}.activePreset" }
+      - { type: select, label: Show one stream, command: show_stream, param: ndiName, params: { group: "{{item.id}}" }, options: state.streams, state: "groups.{{item.id}}.stream" }
+      - { type: button, label: Blank this wall, command: clear, params: { group: "{{item.id}}" } }
+  - { type: presets, label: Scenes (all walls), command: recall_scene, param: scene, options: state.sceneList }
+
+# Example content so the panel has something to show in simulation mode.
+simulator:
+  state:
+    layout: Venue
+    groupList:
+      - id: main-wall
+        name: Main wall
+        activePreset: camera-1-full
+        presets: [{ id: camera-1-full, name: Camera 1 full }, { id: camera-slides, name: Camera + slides }, { id: quad, name: Quad }]
+      - id: double-wide
+        name: Double wide
+        activePreset: ""
+        presets: [{ id: slides-full, name: Slides full }]
+    "groups.main-wall.activePreset": camera-1-full
+    "groups.main-wall.presets": [{ id: camera-1-full, name: Camera 1 full }, { id: camera-slides, name: Camera + slides }, { id: quad, name: Quad }]
+    "groups.double-wide.activePreset": ""
+    "groups.double-wide.presets": [{ id: slides-full, name: Slides full }]
+    sceneList: [{ id: opening, name: Opening }]
+    layoutList: [{ id: venue, name: Venue, active: true }]
+    streams: ["ZOWIEBOXPRO-54447 (ZowieBox-54447)", "GFX-PC (Slides)"]

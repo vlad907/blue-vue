@@ -159,7 +159,7 @@ function StepEditor({ step, onChange }: { step: SceneStep; onChange: (s: SceneSt
           <Pick value={step.command || undefined} options={commands.map(([k, c]) => ({ value: k, label: c.label ?? k }))} onChange={(command) => onChange({ ...step, command, params: {} })} />
         </Field>
       </div>
-      {cmd && <ParamsForm params={cmd.params} value={step.params} onChange={(params) => onChange({ ...step, params })} settings={device?.settings} />}
+      {cmd && <ParamsForm params={cmd.params} value={step.params} onChange={(params) => onChange({ ...step, params })} settings={device?.settings} state={device ? live?.devices[device.id]?.state : undefined} />}
       {targetIsGroup && group && group.devices.some((id) => site.devices.find((d) => d.id === id)?.profile !== device?.profile) && (
         <p className="help">This wall has more than one device type; the command must exist on all of them.</p>
       )}

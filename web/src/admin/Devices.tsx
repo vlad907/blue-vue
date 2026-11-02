@@ -210,7 +210,7 @@ function DeviceConsole({ id, unsaved, onClose }: { id: string; unsaved: boolean;
           <Pick value={command} options={commands.map(([k, c]) => ({ value: k, label: c.label ?? k }))} onChange={(c) => { setCommand(c); setParams({}); }} />
         </Field>
       </div>
-      {cmd && <ParamsForm params={cmd.params} value={params} onChange={setParams} settings={device.settings} />}
+      {cmd && <ParamsForm params={cmd.params} value={params} onChange={setParams} settings={device.settings} state={live?.state} />}
       <button
         className="btn primary"
         disabled={!command}

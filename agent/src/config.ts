@@ -35,7 +35,7 @@ export function loadConfig(path: string): AgentConfig {
   const raw = JSON.parse(readFileSync(path, "utf8"));
   const cfg: AgentConfig = {
     name: raw.name,
-    port: raw.port ?? 8090,
+    port: raw.port ?? 8095,
     token: raw.token,
     simulate: raw.simulate ?? false,
     pollSeconds: raw.pollSeconds ?? 15,

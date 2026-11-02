@@ -40,25 +40,35 @@ function matches(rule: ParseRule, text: string): Record<string, unknown>[] {
     } catch {
       return [];
     }
-    const value = jsonPath(data, rule.jsonPath);
-    return value === undefined ? [] : [{ value }];
+    // "[*]" yields one match per list item, so one rule can fill state for every group, zone, etc.
+    return jsonPathAll(data, rule.jsonPath).map((value) => ({ value }));
   }
   return [];
 }
 
 /** Supports "$.a.b[0].c", "a.b.0.c" and "$" (the whole document). */
 export function jsonPath(data: unknown, path: string): unknown {
+  return jsonPathAll(data, path)[0];
+}
+
+/** Like jsonPath, but "[*]" (or ".*") fans out over every item of a list or object. */
+export function jsonPathAll(data: unknown, path: string): unknown[] {
   const parts = path
     .replace(/^\$\.?/, "")
-    .replace(/\[(\d+)\]/g, ".$1")
+    .replace(/\[(\d+|\*)\]/g, ".$1")
     .split(".")
     .filter(Boolean);
-  let cur = data;
+  let current: unknown[] = [data];
   for (const p of parts) {
-    if (cur === null || typeof cur !== "object") return undefined;
-    cur = (cur as Record<string, unknown>)[p];
+    const next: unknown[] = [];
+    for (const cur of current) {
+      if (cur === null || typeof cur !== "object") continue;
+      if (p === "*") next.push(...Object.values(cur as Record<string, unknown>));
+      else if ((cur as Record<string, unknown>)[p] !== undefined) next.push((cur as Record<string, unknown>)[p]);
+    }
+    current = next;
   }
-  return cur;
+  return current;
 }
 
 function decodeXml(s: string) {

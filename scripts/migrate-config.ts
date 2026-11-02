@@ -84,12 +84,12 @@ export function migrate(cfg: LegacyConfig, agents: Record<string, AgentFile>) {
   }
 
   const wallGroups = groups.map((g) => g.id as string);
+  // The old placeholder video wall driver had no wall groups, so its presets can't be mapped;
+  // add the mosaic engine in the admin and rebuild those scene steps there.
   if (cfg.videoWall.driver === "http" && cfg.videoWall.baseUrl) {
     const url = new URL(cfg.videoWall.baseUrl);
-    devices.push({
-      id: "videowall", name: "Video wall", profile: "video-wall-http",
-      settings: { host: url.hostname, port: Number(url.port || 80), presets: cfg.videoWall.presets.map(({ id, name }) => ({ id, name })) },
-    });
+    devices.push({ id: "mosaic", name: "Mosaic engine", profile: "mosaic-engine", settings: { host: url.hostname, port: Number(url.port || 8090) } });
+    warnings.push("video wall: added the mosaic engine; its old presets had no wall group, so re-add preset steps to scenes in the admin");
   }
   const hasDevice = (id: string) => devices.some((d) => d.id === id);
 
@@ -108,8 +108,7 @@ export function migrate(cfg: LegacyConfig, agents: Record<string, AgentFile>) {
           break;
         }
         case "wallPreset":
-          if (hasDevice("videowall")) steps.push({ type: "command", device: "videowall", command: "recall_preset", params: { preset: step.preset } });
-          else warnings.push(`scene ${s.id}: wall preset "${step.preset}" dropped (no HTTP video wall configured)`);
+          warnings.push(`scene ${s.id}: wall preset "${step.preset}" dropped (re-add it with the mosaic engine's wall and preset)`);
           break;
         case "tune":
         case "boxKey":

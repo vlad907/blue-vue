@@ -53,6 +53,10 @@ export interface Profile {
   capabilities: Record<string, unknown>;
 }
 
+/** A profile as written in its file (the editor works on this, before `extends` is applied). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type RawProfile = Record<string, any>;
+
 export interface ProfileEntry {
   id?: string;
   name?: string;
@@ -106,6 +110,15 @@ export const adminApi = {
   gracenoteLineups: (zip: string) => call<{ id: string; name: string; type: string; location?: string }[]>("GET", `/api/admin/gracenote/lineups?q=${encodeURIComponent(zip)}`),
   gracenoteChannels: (lineup: string) => call<Site["channels"]>("GET", `/api/admin/gracenote/channels?q=${encodeURIComponent(lineup)}`),
 
+  profileRaw: (id: string) => call<{ raw: RawProfile; source: "builtin" | "custom"; errors: string[]; usedBy: string[] }>("GET", `/api/admin/profiles/${id}`),
+  validateProfile: (profile: RawProfile) => call<{ problems: string[] }>("POST", "/api/admin/profiles/validate", { profile }),
+  saveProfile: (profile: RawProfile) => call<{ usedBy: string[] }>("PUT", `/api/admin/profiles/${encodeURIComponent(String(profile.id))}`, { profile }),
+  deleteProfile: (id: string) => call("DELETE", `/api/admin/profiles/${id}`),
+  previewCommand: (profile: RawProfile, command: string, params: Record<string, unknown>, settings: Record<string, unknown>) =>
+    call<{ sent?: string[]; state?: Record<string, unknown>; warnings?: string[]; problems: string[] }>("POST", "/api/admin/profiles/preview", { profile, command, params, settings }),
+  parseTest: (rules: unknown[], sample: string, settings: Record<string, unknown> = {}) =>
+    call<{ updates?: Record<string, unknown>; problems: string[] }>("POST", "/api/admin/profiles/parse-test", { rules, sample, settings }),
+  learnIr: (location: string, irHost: string) => call<{ pronto: string }>("POST", "/api/admin/ir/learn", { location, irHost }),
   profiles: () => call<ProfileEntry[]>("GET", "/api/v2/profiles"),
   profile: (id: string) => call<Profile>("GET", `/api/v2/profiles/${id}`),
   deviceLog: (id: string) => call<LogEntry[]>("GET", `/api/v2/devices/${id}/log`),

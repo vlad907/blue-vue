@@ -187,14 +187,14 @@ export class AgentHub {
     this.sendTo(r.agent, { type: "conn.open", connId: r.connId, transport: r.transport, settings: r.settings });
   }
 
-  request(agent: string, build: (reqId: number) => ServerToAgent): Promise<string | undefined> {
+  request(agent: string, build: (reqId: number) => ServerToAgent, timeoutMs = REQUEST_TIMEOUT_MS): Promise<string | undefined> {
     if (!this.sockets.has(agent)) return Promise.reject(Object.assign(new Error(`wall agent "${agent}" is offline`), { statusCode: 503 }));
     const reqId = this.nextReq++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(reqId);
         reject(new Error(`wall agent "${agent}" didn't answer`));
-      }, REQUEST_TIMEOUT_MS);
+      }, timeoutMs);
       this.pending.set(reqId, { agent, resolve, reject, timer });
       this.sendTo(agent, build(reqId));
     });
@@ -206,6 +206,13 @@ export class AgentHub {
       return;
     }
     await this.request(agent, (reqId) => ({ type: "app.restart", reqId, name }));
+  }
+
+  /** Learns one IR code with an iTach reachable from the agent's wall. */
+  async learnIr(agent: string, host: string, port?: number, timeoutMs = 15_000) {
+    const code = await this.request(agent, (reqId) => ({ type: "ir.learn", reqId, host, port, timeoutMs }), timeoutMs + 3000);
+    if (!code) throw new Error("No IR code received");
+    return code;
   }
 
   isOnline(agent: string) {

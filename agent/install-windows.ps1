@@ -4,7 +4,7 @@
 #       -MosaicExe "C:\Program Files\Mosaic\MosaicWall.exe"
 param(
     [Parameter(Mandatory = $true)][string]$ControlServer,   # control server IP; the agent connects out to it
-    [int]$Port = 8090,
+    [int]$Port = 8095,   # local health check only (8090 is the mosaic engine's)
     [string]$MosaicExe,          # optional: video wall software to launch at logon and keep running
     [string]$WallUser = "$env:USERDOMAIN\$env:USERNAME",
     [switch]$Serial,             # install RS-232 support (the serialport package)

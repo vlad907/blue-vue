@@ -7,6 +7,7 @@ import { Devices } from "./Devices.tsx";
 import { DraftProvider, SaveBar, useDraft } from "./draft.tsx";
 import { Groups, Rooms } from "./Layout.tsx";
 import { LiveProvider, useLive } from "./live.tsx";
+import { Profiles } from "./Profiles.tsx";
 import { Scenes } from "./Scenes.tsx";
 import "./admin.css";
 
@@ -17,6 +18,7 @@ const PAGES = [
   { id: "scenes", label: "Scenes" },
   { id: "channels", label: "Channels" },
   { id: "agents", label: "Wall PCs" },
+  { id: "profiles", label: "Device types" },
   { id: "backup", label: "Backup" },
   { id: "settings", label: "Settings" },
 ] as const;
@@ -108,6 +110,7 @@ function Shell({ onSignOut }: { onSignOut: () => void }) {
         {page === "scenes" && <Scenes />}
         {page === "channels" && <Channels />}
         {page === "agents" && <Agents />}
+        {page === "profiles" && <Profiles />}
         {page === "backup" && <Backup />}
         {page === "settings" && <Settings onSignOut={onSignOut} />}
       </main>

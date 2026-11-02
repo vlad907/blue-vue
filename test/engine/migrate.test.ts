@@ -33,7 +33,7 @@ test("today's system.json and agent.json migrate to a valid site that runs the s
   assert.equal(Object.keys((profiles[0] as any).irCodes).length, 7, "placeholder codes are skipped");
   assert.ok(warnings.some((w) => w.includes("wall3: no agent.json")));
   assert.equal((site.devices.find((d) => d.id === "box3")!.settings as any).irHost, "10.0.10.32");
-  assert.ok(warnings.some((w) => w.includes('wall preset "full" dropped')), "simulated video wall has no HTTP device");
+  assert.ok(warnings.some((w) => w.includes('wall preset "full" dropped')), "old presets have no wall group to map to");
 
   // "Open Venue": all walls on -> one group step for wall1 (the only wall with panels).
   const open = site.scenes.find((s) => s.id === "open")!;

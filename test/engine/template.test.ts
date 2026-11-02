@@ -33,5 +33,12 @@ test("parse rules: regex matches repeatedly, xmlTag and jsonPath extract values"
   );
   assert.deepEqual(applyRules([{ jsonPath: "$.status.inputs[1].name", set: { input: "{{value}}" } }], '{"status":{"inputs":[{"name":"a"},{"name":"b"}]}}'), { input: "b" });
   assert.equal(jsonPath({ a: [{ b: 3 }] }, "a.0.b"), 3);
+  // [*] gives one match per item, and keys can use the item's fields.
+  const control = '{"groups":[{"id":"main-wall","activePreset":"cam"},{"id":"double-wide","activePreset":""}]}';
+  assert.deepEqual(applyRules([{ jsonPath: "$.groups[*]", set: { "groups.{{value.id}}.activePreset": "{{value.activePreset}}" } }], control), {
+    "groups.main-wall.activePreset": "cam",
+    "groups.double-wide.activePreset": "",
+  });
+  assert.deepEqual(applyRules([{ jsonPath: "$.groups", set: { groupList: "{{value}}" } }], control).groupList, JSON.parse(control).groups);
   assert.deepEqual(applyRules([{ jsonPath: "$.x", set: { x: "{{value}}" } }], "not json"), {});
 });

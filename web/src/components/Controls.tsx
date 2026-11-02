@@ -30,9 +30,9 @@ export function Controls({ device, profile, controls, item }: Props) {
 
 function ControlView({ device, profile, control: c, item }: { device: UiDevice; profile: UiProfile; control: Control; item?: unknown }) {
   const { ui, state, act } = useApp();
-  const ctx = { settings: device.settings, item, device };
   const deviceState = state.devices[device.id]?.state ?? {};
-  const value = c.state ? deviceState[render(c.state, ctx)] : undefined;
+  const ctx = { settings: device.settings, item, device, state: deviceState };
+  const value = c.state ? resolve(render(c.state, ctx), ctx) : undefined;
   const label = render(c.label, ctx);
   const baseParams = renderParams(c.params, ctx);
   const param: Param | undefined = c.command && c.param ? profile.commands[c.command]?.params[c.param] : undefined;
@@ -44,7 +44,7 @@ function ControlView({ device, profile, control: c, item }: { device: UiDevice; 
 
   switch (c.type) {
     case "group": {
-      const list = c.repeat ? lookup(ctx, c.repeat) : [undefined];
+      const list = c.repeat ? resolve(c.repeat, ctx) : [undefined];
       if (!Array.isArray(list) || !list.length) return null;
       return (
         <>
@@ -93,7 +93,7 @@ function ControlView({ device, profile, control: c, item }: { device: UiDevice; 
       return <Slider label={label} param={param} value={typeof value === "number" ? value : undefined} onSend={(v) => run(c.command, { [c.param!]: v })} />;
 
     case "select": {
-      const options = optionsFor(c, param, ctx, ui.channels);
+      const options = optionsFor(c, param, { ...ctx, ...baseParams }, ui.channels);
       return (
         <label className="field">
           <span>{label}</span>
@@ -108,7 +108,7 @@ function ControlView({ device, profile, control: c, item }: { device: UiDevice; 
     }
 
     case "presets": {
-      const options = optionsFor(c, param, ctx, ui.channels);
+      const options = optionsFor(c, param, { ...ctx, ...baseParams }, ui.channels);
       if (!options.length) return null;
       return (
         <div>
@@ -137,15 +137,27 @@ function ControlView({ device, profile, control: c, item }: { device: UiDevice; 
 }
 
 /** Choices for a select/presets: a settings list, the param's settings list, or the enum's values. */
+/**
+ * Finds a value for a profile path: a device state key ("power",
+ * "groups.main-wall.activePreset", or "state.streams"), or a path into the
+ * settings or the repeated item ("settings.zones", "item.presets").
+ */
+function resolve(path: string, ctx: Record<string, unknown>): unknown {
+  const state = ctx.state as Record<string, unknown>;
+  if (path.startsWith("state.")) return state[path.slice(6)];
+  if (/^(settings|item|device)\./.test(path)) return lookup(ctx, path);
+  return state[path] ?? lookup(ctx, path);
+}
+
 function optionsFor(c: Control, param: Param | undefined, ctx: Record<string, unknown>, channels: { number: number; name: string }[]): Option[] {
   const path = c.options ?? param?.optionsFrom;
   if (path) {
-    const list = lookup(ctx, path);
+    const list = resolve(render(path, ctx), ctx);
     if (!Array.isArray(list)) return [];
     return list.map((it) => {
       if (it && typeof it === "object") {
         const o = it as Record<string, unknown>;
-        const v = (o.index ?? o.id ?? o.value ?? o.number) as string | number;
+        const v = (o.index ?? o.id ?? o.value ?? o.number ?? o.name) as string | number;
         return { value: v, label: String(o.name ?? o.label ?? v) };
       }
       return { value: it as string | number, label: channelLabel(channels, it) };

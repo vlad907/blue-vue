@@ -38,12 +38,9 @@ IR devices (Xfinity boxes, IR TVs) are driven through a Global Caché iTach (IP2
    - validates the config
    - registers a startup task that runs as SYSTEM and restarts the agent if it exits
    - with `-MosaicExe`: registers a `BlueVueMosaic` task that launches your wall software in the signed-in user's session
-   - opens port 8090 in the firewall, but only to the control server's IP
+   - removes the inbound firewall rule older versions created (the agent only connects out)
    - starts the agent
-4. Add the wall to the central server's `config/system.local.json`:
-   ```json
-   "endpoints": [{ "id": "wall1", "name": "Main Bar", "url": "http://10.0.10.21:8090", "token": "<token from step 3>" }]
-   ```
+4. In the control server's admin, open **Wall PCs**. The new agent appears under "Waiting for approval"; approve it.
 
 ## Commissioning
 

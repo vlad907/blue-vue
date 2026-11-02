@@ -90,3 +90,30 @@ pre.state { background: var(--bg); border: 1px solid var(--line); border-radius:
   .drawer { position: static; width: auto; max-height: none; }
   .savebar { left: 0; }
 }
+
+/* --- Profile editor --- */
+.profile-editor { max-width: 1100px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 14px 0; overflow-x: auto; }
+.tabs button { background: none; border: 0; border-bottom: 3px solid transparent; padding: 10px 14px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
+fieldset.plain:disabled { opacity: .85; }
+.inline-problems { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.35); border-radius: 8px; padding: 8px 8px 8px 26px; }
+.two-col { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start; }
+.cmd-list { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 12px; }
+.cmd-list > button:not(.btn) { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; }
+.cmd-list > button.active { border-color: var(--accent); background: rgba(59,130,246,.12); }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace !important; font-size: 13px; }
+.nested { border-left: 2px solid var(--line); margin: 8px 0 4px 6px; padding-left: 12px; }
+.aform.inline.wide-first { grid-template-columns: 4fr 1fr; }
+.aform.inline.wide-second { grid-template-columns: 1fr 3fr 2fr; }
+textarea { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font: inherit; font-size: 14px; width: 100%; resize: vertical; }
+textarea.yaml { min-height: 420px; line-height: 1.45; }
+.ir-row { display: grid; grid-template-columns: 180px 1fr auto auto; gap: 8px; align-items: start; margin: 6px 0; }
+.preview { margin-top: 18px; }
+.preview-out { margin-top: 10px; }
+.tester { margin-top: 6px; }
+.tester input { flex: 1; min-width: 200px; }
+input.invalid { outline: 2px solid var(--bad); }
+.steps-ed .step + .step { margin-top: 8px; }
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } .cmd-list { position: static; } .ir-row { grid-template-columns: 1fr; } }
