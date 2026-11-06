@@ -204,6 +204,8 @@ function DeviceConsole({ id, unsaved, onClose }: { id: string; unsaved: boolean;
         {live?.error && <span className="muted">{live.error}</span>}
       </div>
 
+      {profile?.transport.type === "androidtv" && <PairPanel id={id} unsaved={unsaved} paired={live?.online === true} />}
+
       <h3 className="section">Send a command</h3>
       <div className="aform">
         <Field label="Command">
@@ -234,5 +236,65 @@ function DeviceConsole({ id, unsaved, onClose }: { id: string; unsaved: boolean;
         {!log.length && <div className="muted">No traffic yet.</div>}
       </div>
     </aside>
+  );
+}
+
+/**
+ * Pairs an Android / Google TV: the TV shows a code, the technician types it
+ * in. Only needed once per TV (and again if the TV is reset).
+ */
+function PairPanel({ id, unsaved, paired }: { id: string; unsaved: boolean; paired: boolean }) {
+  const { notice } = useDraft();
+  const [phase, setPhase] = useState<"idle" | "starting" | "code" | "sending">("idle");
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string>();
+
+  const run = async (fn: () => Promise<unknown>, next: typeof phase, busy: typeof phase) => {
+    setError(undefined);
+    setPhase(busy);
+    try {
+      await fn();
+      setPhase(next);
+      return true;
+    } catch (err) {
+      setError((err as Error).message);
+      setPhase(busy === "sending" ? "code" : "idle");
+      return false;
+    }
+  };
+
+  return (
+    <>
+      <h3 className="section">Pairing</h3>
+      {paired && phase === "idle" && <p className="help">Connected, so this TV is paired. Pair again only if the TV was reset or shows as offline with a certificate error.</p>}
+      {unsaved && <p className="help">Save & apply first if you just changed this device's IP address.</p>}
+      {phase === "idle" || phase === "starting" ? (
+        <button className="btn" disabled={phase === "starting"} onClick={() => run(() => adminApi.pair(id, "start"), "code", "starting")}>
+          {phase === "starting" ? "Asking the TV…" : "Pair with this TV"}
+        </button>
+      ) : (
+        <div className="aform inline">
+          <Field label="Code on the TV" help="6 characters, shown on the TV screen now">
+            <input className="mono" type="text" maxLength={6} autoFocus value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} />
+          </Field>
+          <div className="row-tight">
+            <button
+              className="btn primary"
+              disabled={code.length !== 6 || phase === "sending"}
+              onClick={async () => {
+                if (await run(() => adminApi.pair(id, "finish", code), "idle", "sending")) {
+                  setCode("");
+                  notice("Paired. The TV connects within a few seconds.");
+                }
+              }}
+            >
+              {phase === "sending" ? "Pairing…" : "Pair"}
+            </button>
+            <button className="btn" onClick={() => { void adminApi.pair(id, "cancel").catch(() => {}); setPhase("idle"); setCode(""); }}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {error && <p className="bad-text">{error}</p>}
+    </>
   );
 }

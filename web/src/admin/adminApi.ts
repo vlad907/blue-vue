@@ -118,6 +118,8 @@ export const adminApi = {
     call<{ sent?: string[]; state?: Record<string, unknown>; warnings?: string[]; problems: string[] }>("POST", "/api/admin/profiles/preview", { profile, command, params, settings }),
   parseTest: (rules: unknown[], sample: string, settings: Record<string, unknown> = {}) =>
     call<{ updates?: Record<string, unknown>; problems: string[] }>("POST", "/api/admin/profiles/parse-test", { rules, sample, settings }),
+  pair: (id: string, step: "start" | "finish" | "cancel", code?: string) =>
+    call<{ ok: boolean; simulated: boolean }>("POST", `/api/admin/devices/${encodeURIComponent(id)}/pair`, { step, code }),
   learnIr: (location: string, irHost: string) => call<{ pronto: string }>("POST", "/api/admin/ir/learn", { location, irHost }),
   profiles: () => call<ProfileEntry[]>("GET", "/api/v2/profiles"),
   profile: (id: string) => call<Profile>("GET", `/api/v2/profiles/${id}`),

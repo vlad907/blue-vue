@@ -162,13 +162,14 @@ function GeneralTab({ p, update, isNew }: { p: RawProfile; update: (fn: (p: RawP
               { value: "http", label: "Network: HTTP / web API" },
               { value: "serial", label: "RS-232 / serial (on a wall PC)" },
               { value: "ir", label: "IR through a Global Caché iTach" },
+              { value: "androidtv", label: "Android / Google TV remote (pairing code)" },
               { value: "adb", label: "Android TV (ADB)" },
               { value: "wol", label: "Wake-on-LAN only" },
             ]}
             onChange={(v) => setT("type", v)}
           />
         </Field>
-        {["tcp", "udp", "http", "adb"].includes(t.type) && (
+        {["tcp", "udp", "http", "adb", "androidtv"].includes(t.type) && (
           <Field label="Default port" help="Devices can override it with a port setting."><input type="number" value={t.port ?? ""} onChange={(e) => setT("port", num(e.target.value))} /></Field>
         )}
         {["tcp", "udp", "serial"].includes(t.type) && (

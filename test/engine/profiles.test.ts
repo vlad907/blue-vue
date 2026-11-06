@@ -5,6 +5,9 @@ import { createServer as createTcpServer, type Socket } from "node:net";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { identityStore, resetIdentity } from "../../agent/src/transports/androidtv/cert.ts";
+import { finishPairing, startPairing } from "../../agent/src/transports/androidtv/remote.ts";
+import { FakeTv } from "../../agent/test/fake-android-tv.ts";
 import { DeviceManager } from "../../src/engine/device-manager.ts";
 import { ProfileLibrary } from "../../src/engine/profiles.ts";
 import { EngineSceneRunner } from "../../src/engine/scenes.ts";
@@ -178,6 +181,50 @@ test("hot reload restarts only changed devices; groups, capabilities and scenes 
     assert.equal(state.state.devices.p3, undefined);
     assert.throws(() => manager.runtime("p3"), /Unknown device/);
     assert.deepEqual(manager.withCapability("power").sort(), ["p1", "p2"]);
+  } finally {
+    cleanup();
+  }
+});
+
+test("TCL Google TV remote profile: pairs, reads power from the TV, presses POWER only when needed", async () => {
+  identityStore.dir = mkdtempSync(join(tmpdir(), "bv-atv-"));
+  resetIdentity();
+  const tv = new FakeTv();
+  await tv.start();
+  const { manager, state, cleanup } = setup();
+  try {
+    await startPairing("127.0.0.1", tv.pairingPort);
+    await finishPairing("127.0.0.1", tv.code);
+    manager.apply(site({ devices: [{ id: "tv", name: "TV", profile: "tcl-google-tv-remote", settings: { host: "127.0.0.1", port: tv.remotePort } }] }));
+    await until(() => state.state.devices.tv.state.power === "off", 5000);
+    assert.equal(state.state.devices.tv.state.model, "98QM7L");
+    assert.equal(state.state.devices.tv.online, true);
+
+    await manager.capability("tv", "power", "on");
+    assert.equal(state.state.devices.tv.state.power, "on");
+    await manager.capability("tv", "power", "on"); // already on: nothing pressed
+    await manager.execute("tv", "input", { input: "hdmi1" });
+    await manager.execute("tv", "home");
+    await until(() => tv.keys.length === 3);
+    assert.deepEqual(tv.keys, [26, 243, 3]);
+    assert.equal(state.state.devices.tv.state.input, "hdmi1");
+    await manager.capability("tv", "power", "off");
+    assert.equal(state.state.devices.tv.state.power, "off");
+  } finally {
+    cleanup();
+    tv.stop();
+  }
+});
+
+test("TCL Google TV remote profile in simulation follows on/off", async () => {
+  const { manager, state, cleanup } = setup([], true);
+  try {
+    manager.apply(site({ devices: [{ id: "tv", name: "TV", profile: "tcl-google-tv-remote", settings: { host: "10.0.0.9" } }] }));
+    await until(() => state.state.devices.tv?.online === true);
+    await manager.capability("tv", "power", "off");
+    assert.equal(state.state.devices.tv.state.power, "off");
+    await manager.capability("tv", "power", "on");
+    assert.equal(state.state.devices.tv.state.power, "on");
   } finally {
     cleanup();
   }

@@ -38,7 +38,7 @@ manufacturer: Acme
 category: projector           # display, tuner, audio, video-wall, switcher, projector, lighting, other
 
 transport:
-  type: tcp                   # tcp, udp, http, serial, ir, adb, wol
+  type: tcp                   # tcp, udp, http, serial, ir, adb, wol, androidtv
   port: 4352
   terminator: "\r"            # added to every `send`
   delimiter: "\r"             # splits replies into messages (default "\n")
@@ -84,6 +84,9 @@ A command is a list of steps, run in order.
 | IR code | `ir: KEY_POWERON` (a name from `irCodes`), plus `repeat: 2` if needed |
 | ADB | `adb: input keyevent KEYCODE_WAKEUP` |
 | Wake-on-LAN | `wol: true` (uses the `mac` setting) |
+| Android TV remote: key | `androidtv: { key: HOME }`. Names come from Android's `KEYCODE_*` list (`DPAD_UP`, `TV_INPUT_HDMI_{{input \| digits}}`), or use a number |
+| Android TV remote: power | `androidtv: { power: "on" }`. Presses POWER only if the TV reports the other state, and replies with what the TV reported |
+| Android TV remote: app link | `androidtv: { appLink: "https://www.youtube.com" }` |
 | Wait | `delay: 500`, or `delay: "{{settings.delayMs}}"` |
 | Each character | `forEachChar: "{{channel}}"` with nested `steps`, using `{{item}}` |
 | Each list item | `forEach: settings.zones` with nested `steps`, using `{{item.index}}` |
@@ -93,6 +96,7 @@ Optional parts of a command:
 - `params` declares typed inputs (`number`/`integer` with `min`/`max`, `boolean`, `string`, `enum` with `values`). Values are checked before anything is sent.
 - `sets` updates state right away. Use it for one-way devices like IR.
 - `parse` reads the HTTP or ADB reply.
+- Android TV remote devices send their reports as small JSON messages that `feedback` rules read with `jsonPath`: `{"power": true}`, `{"app": "com.netflix.ninja"}`, `{"volume": 12, "volumeMax": 100, "muted": false}`, `{"model": "98QM7L", "vendor": "TCL", "paired": true}`. Power commands reply with `{"power": true, "result": "on, reported by the TV"}`.
 
 ## Templates
 `{{name}}` inserts a command param, `{{settings.host}}` a device setting, `{{state.power}}` the current state, and `{{item}}` the current item in a loop. Filters chain left to right:

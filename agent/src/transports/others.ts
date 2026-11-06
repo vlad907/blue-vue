@@ -211,6 +211,8 @@ export class SimulatedConnection extends Connection {
   async send(p: RenderedPayload) {
     this.sent.push(p);
     this.log("tx", `${describe(p)} (simulated)`);
+    // A simulated Android TV reports the power it was asked for, like a real one would.
+    if (p.kind === "androidtv" && p.power) return JSON.stringify({ power: p.power === "on", result: `${p.power} (simulated)` });
     return p.kind === "http" || p.kind === "adb" ? "" : undefined;
   }
 }

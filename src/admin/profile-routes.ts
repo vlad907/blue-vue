@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { learnOnce, sendirToPronto } from "../../agent/src/learn.ts";
+import { pairStep } from "../../agent/src/transports/androidtv/remote.ts";
 import { SimulatedConnection, describe } from "../../agent/src/transports/index.ts";
 import { resolveSettings } from "../engine/device-manager.ts";
 import { DeviceRuntime } from "../engine/device-runtime.ts";
@@ -96,6 +97,28 @@ export function registerProfileRoutes(admin: FastifyInstance, engine: Engine) {
     } catch (err) {
       return { problems: [err instanceof Error ? err.message : String(err)] };
     }
+  });
+
+  /**
+   * Pairs a saved Android TV device with this system: "start" makes the TV
+   * show a code, "finish" sends the code typed in. Runs where the device is
+   * reached from, since that machine's certificate is the one the TV learns.
+   */
+  admin.post("/api/admin/devices/:id/pair", async (req) => {
+    const { id } = req.params as { id: string };
+    const { step, code } = z.object({ step: z.enum(["start", "finish", "cancel"]), code: z.string().optional() }).parse(req.body);
+    const device = engine.site().devices.find((d) => d.id === id);
+    if (!device) throw fail(404, `No saved device "${id}"`);
+    if (engine.profiles.get(device.profile)?.transport.type !== "androidtv") throw fail(400, `${device.name} isn't an Android TV remote device`);
+    const host = String(device.settings.host ?? "");
+    if (!host) throw fail(400, `${device.name} has no IP address`);
+    try {
+      if (device.location === "server") await pairStep(host, step, code, engine.simulate);
+      else await engine.agents.pairAndroidTv(device.location, host, step, code);
+    } catch (err) {
+      throw (err as { statusCode?: number }).statusCode ? err : fail(400, err instanceof Error ? err.message : String(err));
+    }
+    return { ok: true, simulated: engine.simulate };
   });
 
   /** Learns one IR code from a remote, with an iTach reached from the server or a wall PC. */

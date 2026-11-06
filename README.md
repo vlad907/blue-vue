@@ -4,7 +4,7 @@ A touch-panel control system for venues: video walls of TVs, Xfinity boxes with 
 
 Every device is described by a **profile**: a YAML file listing its commands, how to read its state, and which controls to show. The touch panel builds itself from those profiles. Adding a new kind of device means writing a profile, not code (see [docs/profiles.md](docs/profiles.md)).
 
-Built-in profiles: the mosaic engine (video wall content), AtlasIED Atmosphere, Xfinity box (IR via iTach), TCL Roku TV, TCL Google TV, generic IR TV, and any PJLink projector. New device types are made in the admin's **Device types** editor, with no code.
+Built-in profiles: the mosaic engine (video wall content), AtlasIED Atmosphere, Xfinity box (IR via iTach), TCL Roku TV, TCL Google TV (Android TV Remote pairing, or ADB), generic IR TV, and any PJLink projector. New device types are made in the admin's **Device types** editor, with no code.
 
 ## How it fits together
 
@@ -57,6 +57,11 @@ Edits are collected and applied together with **Save & apply**. The server check
 
 Device-specific notes:
 - **TCL Roku panels** (`tcl-roku-tv`): network control. On each TV, turn on Fast TV start, set Control by mobile apps to Permissive, turn off Auto power off, and set Power on to Last used input. Run `node src/agent.ts discover` on a wall PC to find them all.
+- **TCL Google TV panels, e.g. 98QM7L / 55QM7L** (`tcl-google-tv-remote`): network control with the Android TV Remote protocol, the one the Google TV phone app uses (TCP 6466 and 6467). It doesn't need ADB, which these TVs usually have closed. Add the TV with its IP address, **Save & apply**, then open its **Test** panel in the admin and press **Pair with this TV**: the TV shows a 6-character code to type in. Pairing is done once per TV, from wherever the TV is reached (the control server or a wall PC). That machine keeps the certificate the TV learned in `androidtv-remote.pem` (in `data/` on the server, next to `agent.json` on a wall PC); deleting it means pairing every TV again. Give each TV a DHCP reservation.
+  - **Power state** comes from the TV itself, which reports on/off over the connection. The protocol only has a POWER key, which toggles, so **On** and **Off** press it only when the TV reports the other state, then wait for the TV to confirm. If the TV hasn't reported its state, nothing is sent.
+  - **Power-on** works only if the TV keeps its network up in standby. Leave the TV off for at least 15 minutes and try **On**. If the TV shows offline while off, fill in its MAC address so **On** tries wake-on-LAN first. If that fails too, these TVs need IR for power-on.
+  - **HDMI inputs** use the standard Android HDMI 1–4 keys. Whether a TV acts on them is up to its firmware, so check each input on your model. The panel shows the last input *sent*, because the TV doesn't report its input. **Open the input menu** (the Input key) is the fallback.
+  - The older `tcl-google-tv` (ADB) profile stays for TVs with network debugging turned on.
 - **Xfinity boxes** (`xfinity-ir`): IR through a Global Caché iTach, with **one iTach port per box**. Identical boxes respond to the same codes, so if one emitter can reach two boxes, both will change channel. Learn codes once with `node src/agent.ts learn xfinity` on a wall PC, then put them in a custom profile that `extends: xfinity-ir` (see [docs/profiles.md](docs/profiles.md)).
 - **Atlas** (`atlas-atmosphere`): enable third-party control in Atmosphere. Zones, sources and scenes are numbered from 0, in Atmosphere's order. Changes made from Atmosphere wall panels show up live.
 - **Video walls (panels)**: a group with `"kind": "wall"` whose devices are the panels. The Video Walls tab shows each wall's panels, and its PC and mosaic software status.

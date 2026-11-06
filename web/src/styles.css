@@ -88,7 +88,8 @@ button.small { padding: 4px 10px; font-size: 13px; border-radius: 8px; border: 1
 .controls { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
 .control-group { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
 .control-group .controls { margin-top: 4px; }
-.status-row { display: flex; justify-content: space-between; align-items: baseline; }
+.status-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; min-width: 0; }
+.status-row b { min-width: 0; overflow-wrap: anywhere; text-align: right; }
 .switch { min-width: 72px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); font-weight: 700; }
 .switch.on { background: var(--accent); border-color: var(--accent); }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }

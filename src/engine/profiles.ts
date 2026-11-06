@@ -151,12 +151,13 @@ export function lint(p: Profile): string[] {
       if (s.command && !commandNames.has(s.command)) errors.push(`${where}: unknown command "${s.command}"`);
       if (s.steps) walk(s.steps, where);
       for (const k of ["send", "hex", "ir", "adb", "forEachChar"]) if (typeof s[k] === "string") templates.push([where, s[k]]);
+      for (const v of Object.values((s.androidtv ?? {}) as Record<string, unknown>)) if (typeof v === "string") templates.push([where, v]);
       if (s.http) {
         templates.push([where, s.http.path]);
         if (s.http.body) templates.push([where, s.http.body]);
         for (const h of Object.values((s.http.headers ?? {}) as Record<string, string>)) templates.push([where, h]);
       }
-      const kind = s.send !== undefined || s.hex !== undefined ? "text" : s.http ? "http" : s.ir !== undefined ? "ir" : s.adb !== undefined ? "adb" : s.wol ? "wol" : undefined;
+      const kind = s.send !== undefined || s.hex !== undefined ? "text" : s.http ? "http" : s.ir !== undefined ? "ir" : s.adb !== undefined ? "adb" : s.wol ? "wol" : s.androidtv ? "androidtv" : undefined;
       if (kind) {
         const t = p.transport.type;
         const ok = kind === "text" ? ["tcp", "udp", "serial"].includes(t) : kind === t;

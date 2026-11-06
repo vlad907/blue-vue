@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { identityStore } from "../../agent/src/transports/androidtv/cert.ts";
 import type { StateStore } from "../state.ts";
 import { AgentHub } from "./agents.ts";
 import { DeviceManager } from "./device-manager.ts";
@@ -10,6 +11,7 @@ import { type Site, SiteStore } from "./site.ts";
 export { BUILTIN_PROFILES };
 
 export interface Engine {
+  simulate: boolean;
   profiles: ProfileLibrary;
   store: SiteStore;
   devices: DeviceManager;
@@ -25,6 +27,8 @@ export interface Engine {
 
 /** Starts the profile-driven device engine from a data folder holding site.json. */
 export function startEngine(dataDir: string, state: StateStore, simulate: boolean): Engine {
+  // The Android TV remote certificate for TVs reached from the server.
+  identityStore.dir = dataDir;
   const store = new SiteStore(dataDir);
   const profiles = new ProfileLibrary(BUILTIN_PROFILES, join(dataDir, "profiles")).load();
   let site = store.load();
@@ -38,6 +42,7 @@ export function startEngine(dataDir: string, state: StateStore, simulate: boolea
     profiles,
     store,
     devices,
+    simulate,
     agents,
     scenes: new EngineSceneRunner(() => site, devices, state),
     site: () => site,

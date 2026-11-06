@@ -14,6 +14,16 @@ const HttpPayload = z.object({
   headers: z.record(z.string()).optional(),
 });
 
+/** Android TV Remote protocol: a key press, discrete power (sent only if the TV reports the other state), or an app link. */
+const AndroidTvPayload = z
+  .object({
+    key: z.union([z.string(), z.number()]).optional(), // "HOME", "KEYCODE_TV_INPUT_HDMI_{{input | digits}}" or a number
+    power: z.string().optional(), // template giving "on" or "off"
+    appLink: z.string().optional(), // template
+  })
+  .strict()
+  .refine((p) => [p.key, p.power, p.appLink].filter((x) => x !== undefined).length === 1, { message: "androidtv needs exactly one of key, power, appLink" });
+
 /** One thing sent to the device. Exactly one transport key is set. */
 export const Payload = z
   .object({
@@ -23,9 +33,10 @@ export const Payload = z
     ir: z.string().optional(), // name in irCodes (template), e.g. "KEY_{{item}}"
     adb: z.string().optional(), // adb shell arguments (template)
     wol: z.literal(true).optional(), // wake-on-LAN using settings.mac
+    androidtv: AndroidTvPayload.optional(),
   })
-  .refine((p) => ["send", "hex", "http", "ir", "adb", "wol"].filter((k) => p[k as keyof typeof p] !== undefined).length === 1, {
-    message: "a payload needs exactly one of send, hex, http, ir, adb, wol",
+  .refine((p) => ["send", "hex", "http", "ir", "adb", "wol", "androidtv"].filter((k) => p[k as keyof typeof p] !== undefined).length === 1, {
+    message: "a payload needs exactly one of send, hex, http, ir, adb, wol, androidtv",
   });
 export type Payload = z.infer<typeof Payload>;
 
@@ -169,7 +180,7 @@ export type Capabilities = z.infer<typeof Capabilities>;
 // --- Transport --------------------------------------------------------------
 
 export const Transport = z.object({
-  type: z.enum(["tcp", "udp", "http", "serial", "ir", "adb", "wol"]),
+  type: z.enum(["tcp", "udp", "http", "serial", "ir", "adb", "wol", "androidtv"]),
   port: z.number().int().positive().optional(),
   terminator: z.string().optional(), // appended to `send` payloads, e.g. "\r"
   delimiter: z.string().optional(), // splits incoming data into messages; default "\n"

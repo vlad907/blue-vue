@@ -1,0 +1,110 @@
+id: tcl-google-tv-remote
+name: TCL Google TV (Android TV Remote)
+manufacturer: TCL
+model: QM7L, QM8 and other Google TV models
+category: display
+description: >
+  Network control with the Android TV Remote protocol, the same one the
+  Google TV phone app uses (ports 6466 and 6467). No developer options or ADB
+  needed. After saving the device, open its Test panel in the admin and press
+  Pair: the TV shows a code to type in. The TV reports its own power state,
+  so On and Off only press POWER when the TV says it's in the other state.
+  Power-on works only while the TV keeps its network up in standby; fill in
+  the MAC address to also try wake-on-LAN. HDMI keys are standard Android
+  keys, but each TV model decides whether to honour them, so test inputs on
+  your model before relying on them.
+
+transport:
+  type: androidtv
+  port: 6466
+  minGapMs: 150
+
+settings:
+  - { key: host, label: IP address, type: string, required: true }
+  - { key: mac, label: MAC address, type: string, help: "Optional. Used for wake-on-LAN when the TV has dropped off the network in standby" }
+
+commands:
+  power_on:
+    label: Power on
+    steps: [{ androidtv: { power: "on" } }]
+  power_off:
+    label: Power off
+    steps: [{ androidtv: { power: "off" } }]
+  power_toggle:
+    label: Power toggle (POWER key)
+    steps: [{ androidtv: { key: POWER } }]
+  input:
+    label: Select HDMI input
+    params:
+      input: { type: enum, label: Input, values: [hdmi1, hdmi2, hdmi3, hdmi4], labels: { hdmi1: HDMI 1, hdmi2: HDMI 2, hdmi3: HDMI 3, hdmi4: HDMI 4 } }
+    steps: [{ androidtv: { key: "TV_INPUT_HDMI_{{input | digits}}" } }]
+    # The TV doesn't report its input, so this is only what was last sent.
+    sets: { input: "{{input}}" }
+  input_menu:
+    label: Open the input menu
+    steps: [{ androidtv: { key: TV_INPUT } }]
+  home:
+    label: Home
+    steps: [{ androidtv: { key: HOME } }]
+  key:
+    label: Press a remote key
+    params:
+      key:
+        type: enum
+        label: Key
+        values: [DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT, DPAD_CENTER, BACK, HOME, MENU, SETTINGS, INFO, TV_INPUT, MEDIA_PLAY_PAUSE, VOLUME_UP, VOLUME_DOWN, VOLUME_MUTE, SLEEP, WAKEUP, TV_POWER]
+    steps: [{ androidtv: { key: "{{key}}" } }]
+  volume_up:
+    label: Volume up
+    steps: [{ androidtv: { key: VOLUME_UP } }]
+  volume_down:
+    label: Volume down
+    steps: [{ androidtv: { key: VOLUME_DOWN } }]
+  mute:
+    label: Mute
+    steps: [{ androidtv: { key: VOLUME_MUTE } }]
+  open_link:
+    label: Open an app link
+    params:
+      link: { type: string, label: Link, default: "https://www.youtube.com" }
+    steps: [{ androidtv: { appLink: "{{link}}" } }]
+
+state:
+  power: { type: enum, values: ["on", "off"], label: Power (reported by the TV) }
+  input: { type: string, label: Last input sent (not confirmed) }
+  app: { type: string, label: Current app }
+  volume: { type: number, label: Volume }
+  model: { type: string, label: Model }
+
+# The connection turns what the TV reports into small JSON messages.
+feedback:
+  - jsonPath: $.power
+    set: { power: "{{value | bool:on:off}}" }
+  - jsonPath: $.app
+    set: { app: "{{value}}" }
+  - jsonPath: $.volume
+    set: { volume: "{{value}}" }
+  - jsonPath: $.muted
+    set: { muted: "{{value}}" }
+  - jsonPath: $.model
+    set: { model: "{{value}}" }
+  - jsonPath: $.paired
+    set: { paired: "{{value}}" }
+
+capabilities:
+  power: { on: power_on, off: power_off, state: power }
+  source: { select: input, param: input, state: input }
+
+controls:
+  - { type: toggle, label: Power, on: power_on, off: power_off, state: power }
+  - { type: presets, label: Input, command: input, param: input, state: input }
+  - { type: status, label: App, state: app }
+  - type: dpad
+    command: key
+    param: key
+    keys: { up: DPAD_UP, down: DPAD_DOWN, left: DPAD_LEFT, right: DPAD_RIGHT, ok: DPAD_CENTER, back: BACK, menu: MENU, exit: HOME }
+  - { type: button, command: volume_down }
+  - { type: button, command: volume_up }
+
+simulator:
+  state: { power: "on", app: com.google.android.apps.tv.launcherx, model: 98QM7L }

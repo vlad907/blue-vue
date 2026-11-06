@@ -12,7 +12,8 @@ export type WirePayload =
   | { kind: "http"; method: string; path: string; body?: string; headers?: Record<string, string> }
   | { kind: "ir"; pronto: string; repeat: number; label?: string }
   | { kind: "adb"; args: string[] }
-  | { kind: "wol" };
+  | { kind: "wol" }
+  | { kind: "androidtv"; key?: string | number; power?: "on" | "off"; appLink?: string };
 
 export interface AgentAppStatus {
   name: string;
@@ -38,6 +39,8 @@ export type ServerToAgent =
   | { type: "conn.send"; connId: string; reqId: number; payload: WirePayload }
   | { type: "app.restart"; reqId: number; name: string }
   // Puts an iTach near this wall into learning mode; the reply text is the learned sendir code.
-  | { type: "ir.learn"; reqId: number; host: string; port?: number; timeoutMs: number };
+  | { type: "ir.learn"; reqId: number; host: string; port?: number; timeoutMs: number }
+  // Android TV remote pairing with a TV near this wall: "start" makes the TV show a code, "finish" sends it.
+  | { type: "atv.pair"; reqId: number; host: string; step: "start" | "finish" | "cancel"; code?: string };
 
 export const PROTOCOL_VERSION = "1";

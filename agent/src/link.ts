@@ -1,5 +1,6 @@
 import { hostname } from "node:os";
 import { learnOnce } from "./learn.ts";
+import { pairStep } from "./transports/androidtv/remote.ts";
 import type { AgentToServer, ServerToAgent, WirePayload } from "./link-protocol.ts";
 import { type Connection, type RenderedPayload, createConnection } from "./transports/index.ts";
 
@@ -113,6 +114,14 @@ export class AgentLink {
         try {
           const code = await learnOnce(msg.host, msg.timeoutMs, msg.port);
           this.send({ type: "reply", reqId: msg.reqId, ok: true, text: code });
+        } catch (err) {
+          this.send({ type: "reply", reqId: msg.reqId, ok: false, error: err instanceof Error ? err.message : String(err) });
+        }
+        break;
+      case "atv.pair":
+        try {
+          await pairStep(msg.host, msg.step, msg.code, this.opts.simulate);
+          this.send({ type: "reply", reqId: msg.reqId, ok: true });
         } catch (err) {
           this.send({ type: "reply", reqId: msg.reqId, ok: false, error: err instanceof Error ? err.message : String(err) });
         }

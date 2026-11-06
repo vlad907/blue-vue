@@ -215,6 +215,12 @@ export class AgentHub {
     return code;
   }
 
+  /** One Android TV pairing step on a TV the agent's wall can reach. */
+  async pairAndroidTv(agent: string, host: string, step: "start" | "finish" | "cancel", code?: string) {
+    if (this.simulate) return;
+    await this.request(agent, (reqId) => ({ type: "atv.pair", reqId, host, step, code }), 20_000);
+  }
+
   isOnline(agent: string) {
     return this.sockets.has(agent);
   }

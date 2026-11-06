@@ -10,10 +10,11 @@ export type RenderedPayload =
   | { kind: "http"; method: string; path: string; body?: string; headers?: Record<string, string> }
   | { kind: "ir"; pronto: string; repeat: number; label?: string }
   | { kind: "adb"; args: string[] }
-  | { kind: "wol" };
+  | { kind: "wol" }
+  | { kind: "androidtv"; key?: string | number; power?: "on" | "off"; appLink?: string };
 
 export interface TransportConfig {
-  type: "tcp" | "udp" | "http" | "serial" | "ir" | "adb" | "wol";
+  type: "tcp" | "udp" | "http" | "serial" | "ir" | "adb" | "wol" | "androidtv";
   port?: number;
   terminator?: string;
   delimiter?: string;
@@ -64,6 +65,7 @@ export function describe(p: RenderedPayload): string {
     case "ir": return `IR ${p.label ?? "code"}${p.repeat > 1 ? ` x${p.repeat}` : ""}`;
     case "adb": return `adb shell ${p.args.join(" ")}`;
     case "wol": return "wake-on-LAN";
+    case "androidtv": return p.power ? `power ${p.power}` : p.appLink ? `open ${p.appLink}` : `key ${p.key}`;
   }
 }
 

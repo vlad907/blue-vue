@@ -14,6 +14,7 @@ const KINDS = [
   { value: "ir", label: "IR code", transports: ["ir"] },
   { value: "adb", label: "ADB shell", transports: ["adb"] },
   { value: "wol", label: "Wake-on-LAN", transports: ["wol"] },
+  { value: "androidtv", label: "Android TV remote", transports: ["androidtv"] },
   { value: "delay", label: "Wait" },
   { value: "forEachChar", label: "For each character…" },
   { value: "forEach", label: "For each item in a list…" },
@@ -23,7 +24,7 @@ const KINDS = [
 type Kind = (typeof KINDS)[number]["value"];
 
 export function kindOf(step: Step): Kind {
-  for (const k of ["forEachChar", "forEach", "delay", "command", "send", "hex", "http", "ir", "adb", "wol"] as const) if (k in step) return k;
+  for (const k of ["forEachChar", "forEach", "delay", "command", "send", "hex", "http", "ir", "adb", "wol", "androidtv"] as const) if (k in step) return k;
   return "send";
 }
 
@@ -35,6 +36,7 @@ function blank(kind: Kind): Step {
     case "ir": return { ir: "" };
     case "adb": return { adb: "" };
     case "wol": return { wol: true };
+    case "androidtv": return { androidtv: { key: "HOME" } };
     case "delay": return { delay: 500 };
     case "forEachChar": return { forEachChar: "{{channel}}", steps: [] };
     case "forEach": return { forEach: "settings.zones", steps: [] };
@@ -132,6 +134,28 @@ function StepFields({ step, kind, onChange, profile }: { step: Step; kind: Kind;
       );
     case "wol":
       return <p className="help">Sends a wake-on-LAN packet to the device's MAC address (needs a "mac" setting).</p>;
+    case "androidtv": {
+      const a = step.androidtv ?? {};
+      const mode = a.power !== undefined ? "power" : a.appLink !== undefined ? "appLink" : "key";
+      return (
+        <div className="aform inline">
+          <Field label="Action">
+            <Pick
+              value={mode}
+              options={[
+                { value: "key", label: "Press a key" },
+                { value: "power", label: "Power on/off (checks the TV's state first)" },
+                { value: "appLink", label: "Open an app link" },
+              ]}
+              onChange={(m) => onChange({ androidtv: m === "power" ? { power: "on" } : m === "appLink" ? { appLink: "" } : { key: "HOME" } })}
+            />
+          </Field>
+          <Field label={mode === "power" ? "on or off" : mode === "appLink" ? "Link" : "Key"} help={mode === "key" ? "e.g. HOME, DPAD_UP, TV_INPUT_HDMI_1, a number, or {{key}}" : undefined}>
+            <input className="mono" type="text" value={String(a[mode] ?? "")} onChange={(e) => onChange({ androidtv: { [mode]: e.target.value } })} />
+          </Field>
+        </div>
+      );
+    }
     case "delay":
       return (
         <Field label="Milliseconds" help="A number, or a setting like {{settings.digitDelayMs}}">

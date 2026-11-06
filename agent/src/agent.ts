@@ -1,10 +1,11 @@
 import { createServer } from "node:http";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { AppWatcher, SimulatedProcessControl, windowsProcessControl } from "./apps.ts";
 import { COMMANDS, runCli } from "./cli.ts";
 import { type AgentConfig, loadConfig } from "./config.ts";
 import { AgentLink } from "./link.ts";
 import { log } from "./log.ts";
+import { identityStore } from "./transports/androidtv/cert.ts";
 
 const VERSION = "0.2.0";
 
@@ -65,7 +66,10 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
       process.exit(1);
     }
   }
-  const cfg = loadConfig(resolve(process.argv[2] ?? "agent.json"));
+  const configFile = resolve(process.argv[2] ?? "agent.json");
+  const cfg = loadConfig(configFile);
+  // The Android TV remote certificate lives next to agent.json.
+  identityStore.dir = dirname(configFile);
   if (!cfg.server) log("[agent] warning: no server.url in agent.json, so the control server can't reach this wall");
   const agent = createAgent(cfg);
   const port = await agent.start();

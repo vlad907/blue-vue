@@ -169,6 +169,16 @@ export class DeviceRuntime extends EventEmitter {
       return { kind: "ir", pronto, repeat: step.repeat ?? 1, label: key };
     }
     if (step.adb !== undefined) return { kind: "adb", args: render(step.adb, ctx).split(/\s+/).filter(Boolean) };
+    if (step.androidtv) {
+      const a = step.androidtv;
+      if (a.power !== undefined) {
+        const power = render(a.power, ctx).toLowerCase();
+        if (power !== "on" && power !== "off") throw new Error(`androidtv power must be "on" or "off", not "${power}"`);
+        return { kind: "androidtv", power };
+      }
+      if (a.appLink !== undefined) return { kind: "androidtv", appLink: render(a.appLink, ctx) };
+      return { kind: "androidtv", key: typeof a.key === "number" ? a.key : render(String(a.key), ctx) };
+    }
     return { kind: "wol" };
   }
 
