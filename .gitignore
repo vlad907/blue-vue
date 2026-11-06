@@ -7,3 +7,5 @@ androidtv-remote.pem
 logs/
 run-server.cmd
 web/dist/
+release/
+desktop/node_modules/

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>Blue Vue</title>
+  <style>
+    :root {
+      --bg: #0b1220; --panel: #131c2e; --panel-2: #1b2740; --line: #26344f;
+      --text: #e6edf7; --muted: #8a9bb8; --accent: #3b82f6; --ok: #22c55e; --bad: #ef4444;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+      font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: grid; place-items: start center; padding: 56px 16px; }
+    main { width: min(520px, 100%); }
+    h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+    h1 span { color: var(--accent); }
+    .lead { color: var(--muted); margin: 0 0 28px; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 28px 0 10px; }
+    form { display: flex; gap: 8px; }
+    input { flex: 1; min-width: 0; padding: 11px 13px; border-radius: 10px; border: 1px solid var(--line);
+      background: var(--panel); color: var(--text); font: inherit; }
+    input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    button { font: inherit; color: var(--text); cursor: pointer; border-radius: 10px; border: 1px solid var(--line);
+      background: var(--panel-2); padding: 10px 16px; }
+    button.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
+    button:disabled { opacity: 0.55; cursor: default; }
+    .list { display: flex; flex-direction: column; gap: 8px; }
+    .server { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px;
+      background: var(--panel); border: 1px solid var(--line); text-align: left; width: 100%; }
+    .server:hover { border-color: var(--accent); }
+    .server .name { font-weight: 600; }
+    .server .meta { color: var(--muted); font-size: 13px; }
+    .server .grow { flex: 1; min-width: 0; }
+    .server .x { border: none; background: none; color: var(--muted); padding: 4px 8px; }
+    .server .x:hover { color: var(--bad); }
+    .muted { color: var(--muted); font-size: 14px; }
+    .error { background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); color: #fecaca;
+      padding: 10px 12px; border-radius: 10px; margin-bottom: 18px; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Blue <span>Vue</span></h1>
+    <p class="lead">Connect to the Blue Vue server on your media server.</p>
+    <div id="error" class="error" hidden></div>
+
+    <form id="form">
+      <input id="address" placeholder="Server address, e.g. 192.168.1.20" autocomplete="off" spellcheck="false" autofocus />
+      <button class="primary" id="go">Connect</button>
+    </form>
+    <p class="muted">Port 8080 is assumed unless you add one, e.g. 192.168.1.20:9000.</p>
+
+    <section id="recent-section" hidden>
+      <h2>Recent</h2>
+      <div class="list" id="recent"></div>
+    </section>
+
+    <section>
+      <div class="row">
+        <h2>On this network</h2>
+        <button id="scan">Find servers</button>
+      </div>
+      <div class="list" id="found"></div>
+      <p class="muted" id="scan-status">Looks for Blue Vue on port 8080 across this Mac's local network.</p>
+    </section>
+  </main>
+  <script src="connect.js"></script>
+</body>
+</html>

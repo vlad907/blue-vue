@@ -4,7 +4,7 @@
 //   npx tsx scripts/migrate-config.ts [--system config/system.local.json] \
 //       [--agent wall1=path/to/wall1/agent.json ...] [--data data] [--force]
 import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { LegacyConfigSchema, type LegacyConfig } from "./legacy-config.ts";
 import { ProfileLibrary } from "../src/engine/profiles.ts";
 import { SiteStore, type SceneStep } from "../src/engine/site.ts";
@@ -155,7 +155,9 @@ function filterPronto(codes: Record<string, string>) {
   return Object.fromEntries(Object.entries(codes).filter(([, v]) => /^0000( [0-9a-fA-F]{4})+$/.test(v.trim())));
 }
 
-if (import.meta.filename === resolve(process.argv[1] ?? "")) {
+// Run as a command only when this file itself is the entry point. The name
+// check matters in the packaged server, where every module shares one bundle file.
+if (import.meta.filename === resolve(process.argv[1] ?? "") && basename(import.meta.filename).startsWith("migrate-config")) {
   const args = process.argv.slice(2);
   const opt = (name: string) => {
     const i = args.indexOf(name);

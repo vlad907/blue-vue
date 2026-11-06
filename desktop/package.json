@@ -1,0 +1,39 @@
+{
+  "name": "blue-vue-desktop",
+  "productName": "Blue Vue",
+  "version": "0.1.0",
+  "description": "Blue Vue control panel for the Mac",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac --arm64 --x64"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.bluevue.control",
+    "productName": "Blue Vue",
+    "directories": {
+      "output": "../release/mac",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "identity": "-",
+      "hardenedRuntime": false
+    },
+    "dmg": {
+      "title": "Blue Vue ${version}"
+    }
+  }
+}

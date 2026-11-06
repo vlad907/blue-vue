@@ -3,9 +3,10 @@ import { join, resolve } from "node:path";
 import { migrate } from "../../scripts/migrate-config.ts";
 import { LegacyConfigSchema } from "../../scripts/legacy-config.ts";
 import { BUILTIN_PROFILES, ProfileLibrary } from "./profiles.ts";
+import { APP_ROOT } from "../paths.ts";
 import { SiteStore } from "./site.ts";
 
-export const EXAMPLE_SITE = resolve(import.meta.dirname, "..", "..", "config", "example-site.json");
+export const EXAMPLE_SITE = resolve(APP_ROOT, "config", "example-site.json");
 
 /**
  * Creates data/site.json on first start. An install that still has an old

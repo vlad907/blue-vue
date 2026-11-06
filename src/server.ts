@@ -9,6 +9,7 @@ import type { Config } from "./config.ts";
 import type { Engine } from "./engine/index.ts";
 import type { Capabilities } from "./engine/profile-schema.ts";
 import type { GracenoteGuide } from "./guide/gracenote.ts";
+import { APP_ROOT, VERSION } from "./paths.ts";
 import type { StateStore } from "./state.ts";
 
 interface Deps {
@@ -18,7 +19,7 @@ interface Deps {
   guide: GracenoteGuide;
 }
 
-export const WEB_DIST = join(import.meta.dirname, "..", "web", "dist");
+export const WEB_DIST = join(APP_ROOT, "web", "dist");
 
 export async function buildServer({ cfg, state, engine, guide }: Deps) {
   const app = Fastify({ logger: { level: "warn" } });
@@ -47,6 +48,9 @@ export async function buildServer({ cfg, state, engine, guide }: Deps) {
   const Id = z.object({ id: z.string() });
 
   // Everything the touch panel needs to build itself: devices, their profiles' controls, and the layout.
+  // Lets the desktop app find and name servers on the network. Nothing private.
+  app.get("/api/hello", async () => ({ app: "blue-vue", name: engine.site().name, version: VERSION }));
+
   app.get("/api/ui", async () => {
     const site = engine.site();
     const used = new Set(site.devices.map((d) => d.profile));

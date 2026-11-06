@@ -11,7 +11,9 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p web",
     "gracenote": "tsx src/tools/gracenote.ts",
     "build": "vite build web",
-    "dev:web": "vite web"
+    "dev:web": "vite web",
+    "package:server": "tsx scripts/build-server-windows.ts",
+    "package:mac": "npm --prefix desktop install && npm --prefix desktop run dist"
   },
   "engines": {
     "node": ">=20"
@@ -30,6 +32,7 @@
     "@types/react-dom": "^18.3.1",
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^4.3.3",
+    "esbuild": "^0.28.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.9.3",

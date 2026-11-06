@@ -2,9 +2,10 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFile
 import { join } from "node:path";
 import { parse as parseYaml, stringify as toYaml } from "yaml";
 import { type Profile, ProfileSchema } from "./profile-schema.ts";
+import { APP_ROOT } from "../paths.ts";
 import { check } from "./template.ts";
 
-export const BUILTIN_PROFILES = join(import.meta.dirname, "..", "..", "profiles", "builtin");
+export const BUILTIN_PROFILES = join(APP_ROOT, "profiles", "builtin");
 
 export interface ProfileEntry {
   profile?: Profile;

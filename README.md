@@ -36,6 +36,26 @@ Open `http://<control-pc-ip>:8080` on any tablet on the network. On an iPad, use
 
 While working on the panel, `npm run dev:web` serves it with hot reload on :5173, with API calls forwarded to :8080.
 
+## Install
+
+### Server on the media server (Windows)
+Build the package on any machine with this repo (needs internet the first time, to fetch Node):
+```bash
+npm run package:server     # -> release/BlueVue-Server-<version>-win-x64.zip
+```
+Copy the zip to the media server, unzip it, and in an elevated PowerShell in that folder run:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-server.ps1
+```
+This installs Blue Vue as a background task that starts with Windows and restarts if it stops. Program files go to `C:\Program Files\BlueVue`, and data to `C:\ProgramData\BlueVue`, readable by Administrators only. It also opens port 8080 for Private and Domain networks and prints the panel and admin addresses. Open the admin right away and set its password, since whoever opens it first sets it. To update, run the installer from a newer zip; your data is kept. The package includes its own Node, so nothing else needs installing. `install-server.ps1 -GracenoteKey <key>` stores the TV guide key; `uninstall-server.ps1` removes it. The zip's README.txt has the details.
+
+### Mac app
+```bash
+npm run package:mac        # -> release/mac/Blue Vue-<version>-arm64.dmg (Apple silicon) and Blue Vue-<version>.dmg (Intel)
+```
+Open the dmg and drag Blue Vue to Applications. The app is signed for local use only, not by Apple, so the first time, right-click it and choose **Open**. Then type the media server's address or press **Find servers**, which scans this Mac's local network for Blue Vue on port 8080. The app remembers the server and reconnects on launch. ⌘1 shows the control panel, ⌘2 the admin, ⌘K switches servers. The pages come from the server, so updating the server updates what the app shows.
+
+### From source (alternative)
 **Install on the Windows control PC** (elevated PowerShell, from the project folder):
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
