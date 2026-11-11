@@ -62,7 +62,7 @@ export interface Ui {
   name: string;
   simulate: boolean;
   rooms: { id: string; name: string }[];
-  groups: { id: string; name: string; kind: string; devices: string[] }[];
+  groups: { id: string; name: string; kind: string; devices: string[]; columns?: number; mosaic?: { device: string; group: string } }[];
   scenes: { id: string; name: string; description?: string }[];
   channels: Channel[];
   agents: { id: string; name: string }[];
@@ -115,8 +115,8 @@ export const api = {
     request(`/api/v2/devices/${device}/commands/${command}`, { params }),
   capability: (device: string, cap: string, action: string, value?: unknown) =>
     request(`/api/v2/devices/${device}/capabilities/${cap}/${action}`, { value }),
-  groupCapability: (group: string, cap: string, action: string) =>
-    request(`/api/v2/groups/${group}/capabilities/${cap}/${action}`, {}),
+  groupCapability: (group: string, cap: string, action: string, value?: unknown) =>
+    request(`/api/v2/groups/${group}/capabilities/${cap}/${action}`, { value }),
   scene: (id: string) => request<{ ok: boolean; errors: string[] }>(`/api/v2/scenes/${id}`, {}),
   restartApp: (agent: string, app: string) => request(`/api/v2/agents/${agent}/apps/${encodeURIComponent(app)}/restart`, {}),
 };

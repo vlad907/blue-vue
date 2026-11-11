@@ -117,3 +117,13 @@ textarea.yaml { min-height: 420px; line-height: 1.45; }
 input.invalid { outline: 2px solid var(--bad); }
 .steps-ed .step + .step { margin-top: 8px; }
 @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } .cmd-list { position: static; } .ir-row { grid-template-columns: 1fr; } }
+
+/* Adding and pairing TVs in bulk */
+.drawer.wide { width: min(640px, 94vw); }
+.drawer .seg { margin: 14px 0 10px; }
+.pair-code { justify-content: flex-end; }
+.pair-code input { width: 118px; text-transform: uppercase; }
+.atable tr.muted td { color: var(--muted); }
+.card.inset { background: var(--panel-2); margin-top: 8px; }
+.checklist { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 12px; margin: 10px 0; max-height: 280px; overflow-y: auto; }
+.atable td b { white-space: nowrap; }

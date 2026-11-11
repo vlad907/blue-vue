@@ -230,6 +230,28 @@ test("TCL Google TV remote profile in simulation follows on/off", async () => {
   }
 });
 
+test("group commands start panels one after another but don't wait for each to finish", async () => {
+  const slow = { id: "slow-tv", name: "Slow TV", transport: { type: "tcp", port: 1 }, settings: [{ key: "host", label: "IP", type: "string" }], commands: { power_on: { steps: [{ delay: 400 }] }, power_off: { steps: [{ delay: 400 }] } }, capabilities: { power: { on: "power_on", off: "power_off" } } };
+  const { manager, cleanup } = setup([slow], true);
+  try {
+    const devices = [1, 2, 3, 4, 5].map((n) => ({ id: `tv${n}`, name: `TV ${n}`, profile: "slow-tv", settings: { host: "10.0.0.1" } }));
+    manager.apply(site({ devices, groups: [{ id: "wall", name: "Wall", kind: "wall", devices: devices.map((d) => d.id), staggerMs: 50, columns: 5 }] }));
+    const t0 = Date.now();
+    await manager.groupCapability("wall", "power", "on");
+    const took = Date.now() - t0;
+    // One at a time would take 5 x 400ms plus gaps; staggered starts take about 400 + 4 x 50.
+    assert.ok(took < 1200, `took ${took}ms`);
+    assert.ok(took >= 550, `took ${took}ms`);
+  } finally {
+    cleanup();
+  }
+});
+
+test("a wall's mosaic link must name a saved device", () => {
+  const s = SiteSchema.parse({ devices: [{ id: "tv1", name: "TV", profile: "tcl-google-tv-remote", settings: { host: "1.2.3.4" } }], groups: [{ id: "w", name: "W", kind: "wall", devices: ["tv1"], mosaic: { device: "nope", group: "main" } }] });
+  assert.deepEqual(checkSite(s), ['group w: unknown mosaic device "nope"']);
+});
+
 test("built-in PJLink profile: queries power and input, reads replies", async () => {
   const got: string[] = [];
   const projector = createTcpServer((sock) => {

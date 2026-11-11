@@ -108,6 +108,9 @@ button.small { padding: 4px 10px; font-size: 13px; border-radius: 8px; border: 1
 .apps { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
 .app { display: flex; align-items: center; gap: 6px; }
 .panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 6px; margin-top: 12px; }
+.panels .panel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card.wall h4 { margin: 14px 0 8px; }
+.mosaic-linked { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 2px; }
 .panel {
   aspect-ratio: 16 / 9; border-radius: 6px; border: 1px solid var(--line); background: #070b14; color: var(--muted);
   font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; text-align: center; padding: 2px;

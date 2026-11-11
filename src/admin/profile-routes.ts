@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { learnOnce, sendirToPronto } from "../../agent/src/learn.ts";
 import { pairStep } from "../../agent/src/transports/androidtv/remote.ts";
+import { localSubnets, scanAndroidTvs, simulatedTvs } from "../../agent/src/transports/androidtv/scan.ts";
 import { SimulatedConnection, describe } from "../../agent/src/transports/index.ts";
 import { resolveSettings } from "../engine/device-manager.ts";
 import { DeviceRuntime } from "../engine/device-runtime.ts";
@@ -119,6 +120,31 @@ export function registerProfileRoutes(admin: FastifyInstance, engine: Engine) {
       throw (err as { statusCode?: number }).statusCode ? err : fail(400, err instanceof Error ? err.message : String(err));
     }
     return { ok: true, simulated: engine.simulate };
+  });
+
+  /**
+   * Finds Android / Google TVs from the server or a wall PC. Each result says
+   * which saved device already uses that address, so the admin can skip it.
+   */
+  admin.post("/api/admin/discover/androidtv", async (req) => {
+    const { location, subnet } = z.object({ location: z.string().default("server"), subnet: z.string().optional() }).parse(req.body);
+    // "192.168.1", "192.168.1.0/24" and "192.168.1.x" all mean the same /24.
+    const subnets = subnet?.trim() ? subnet.split(/[\s,]+/).filter(Boolean).map((n) => n.split("/")[0].split(".").slice(0, 3).join(".")) : undefined;
+    let found;
+    try {
+      found =
+        location === "server"
+          ? engine.simulate ? simulatedTvs() : await scanAndroidTvs(subnets)
+          : await engine.agents.scanAndroidTvs(location, subnets);
+    } catch (err) {
+      throw (err as { statusCode?: number }).statusCode ? err : fail(400, err instanceof Error ? err.message : String(err));
+    }
+    const byHost = new Map(engine.site().devices.map((d) => [String(d.settings.host ?? ""), d.id]));
+    return {
+      subnets: subnets ?? (location === "server" ? localSubnets() : []),
+      simulated: engine.simulate,
+      found: found.map((tv) => ({ ...tv, existing: byHost.get(tv.host) })),
+    };
   });
 
   /** Learns one IR code from a remote, with an iTach reached from the server or a wall PC. */

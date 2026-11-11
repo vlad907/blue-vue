@@ -3,6 +3,7 @@ import type { WebSocket } from "ws";
 import type { AgentAppStatus, AgentToServer, ServerToAgent } from "../../agent/src/link-protocol.ts";
 import { toWire } from "../../agent/src/link.ts";
 import { Connection, type RenderedPayload, type TransportConfig } from "../../agent/src/transports/index.ts";
+import { type FoundTv, simulatedTvs } from "../../agent/src/transports/androidtv/scan.ts";
 import type { StateStore } from "../state.ts";
 
 export interface AgentView {
@@ -219,6 +220,12 @@ export class AgentHub {
   async pairAndroidTv(agent: string, host: string, step: "start" | "finish" | "cancel", code?: string) {
     if (this.simulate) return;
     await this.request(agent, (reqId) => ({ type: "atv.pair", reqId, host, step, code }), 20_000);
+  }
+
+  /** Looks for Android / Google TVs on the agent's network. */
+  async scanAndroidTvs(agent: string, subnets?: string[]): Promise<FoundTv[]> {
+    if (this.simulate) return simulatedTvs();
+    return JSON.parse((await this.request(agent, (reqId) => ({ type: "atv.scan", reqId, subnets }), 60_000)) ?? "[]");
   }
 
   isOnline(agent: string) {

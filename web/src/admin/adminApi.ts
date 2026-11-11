@@ -22,10 +22,28 @@ export interface Site {
   name: string;
   rooms: { id: string; name: string }[];
   devices: SiteDevice[];
-  groups: { id: string; name: string; kind: "wall" | "zone" | "other"; devices: string[]; staggerMs: number }[];
+  groups: SiteGroup[];
   scenes: { id: string; name: string; description?: string; steps: SceneStep[] }[];
   channels: { number: number; name: string; callSign?: string; stationId?: string; logo?: string; category?: string }[];
   agents: { id: string; name: string; token?: string }[];
+}
+
+export interface SiteGroup {
+  id: string;
+  name: string;
+  kind: "wall" | "zone" | "other";
+  devices: string[];
+  staggerMs: number;
+  columns?: number;
+  mosaic?: { device: string; group: string };
+}
+
+export interface FoundTv {
+  host: string;
+  name?: string;
+  model?: string;
+  mac?: string;
+  existing?: string; // id of the saved device already using this address
 }
 
 export interface SettingField {
@@ -120,6 +138,8 @@ export const adminApi = {
     call<{ updates?: Record<string, unknown>; problems: string[] }>("POST", "/api/admin/profiles/parse-test", { rules, sample, settings }),
   pair: (id: string, step: "start" | "finish" | "cancel", code?: string) =>
     call<{ ok: boolean; simulated: boolean }>("POST", `/api/admin/devices/${encodeURIComponent(id)}/pair`, { step, code }),
+  discoverTvs: (location: string, subnet?: string) =>
+    call<{ found: FoundTv[]; subnets: string[]; simulated: boolean }>("POST", "/api/admin/discover/androidtv", { location, subnet }),
   learnIr: (location: string, irHost: string) => call<{ pronto: string }>("POST", "/api/admin/ir/learn", { location, irHost }),
   profiles: () => call<ProfileEntry[]>("GET", "/api/v2/profiles"),
   profile: (id: string) => call<Profile>("GET", `/api/v2/profiles/${id}`),

@@ -103,20 +103,11 @@ export class DeviceManager {
     return this.runtime(deviceId).execute(command, params);
   }
 
-  /** Runs a command on every device in a group, staggered, and reports failures per device. */
+  /** Runs a command on every device in a group, started one after another, and reports failures per device. */
   async executeGroup(groupId: string, command: string, params: Record<string, unknown> = {}) {
     const group = this.site?.groups.find((g) => g.id === groupId);
     if (!group) throw Object.assign(new CommandError(`Unknown group "${groupId}"`), { statusCode: 404 });
-    const errors: string[] = [];
-    for (const [i, id] of group.devices.entries()) {
-      try {
-        await this.execute(id, command, params);
-      } catch (err) {
-        errors.push(`${id}: ${err instanceof Error ? err.message : err}`);
-      }
-      if (i < group.devices.length - 1) await sleep(group.staggerMs);
-    }
-    if (errors.length) throw new Error(errors.join("; "));
+    await staggered(group.devices, group.staggerMs, (id) => this.execute(id, command, params));
   }
 
   /** Uses a standard capability (power, tuner, ...) without knowing the device's own command names. */
@@ -132,22 +123,31 @@ export class DeviceManager {
   async groupCapability(groupId: string, cap: keyof Capabilities, action: string, value?: unknown) {
     const group = this.site?.groups.find((g) => g.id === groupId);
     if (!group) throw Object.assign(new CommandError(`Unknown group "${groupId}"`), { statusCode: 404 });
-    const errors: string[] = [];
-    for (const [i, id] of group.devices.entries()) {
-      try {
-        await this.capability(id, cap, action, value);
-      } catch (err) {
-        errors.push(`${id}: ${err instanceof Error ? err.message : err}`);
-      }
-      if (i < group.devices.length - 1) await sleep(group.staggerMs);
-    }
-    if (errors.length) throw new Error(errors.join("; "));
+    // The pause is there so a wall doesn't power up all at once; inputs and the rest can go out quickly.
+    const gap = cap === "power" ? group.staggerMs : Math.min(group.staggerMs, 50);
+    await staggered(group.devices, gap, (id) => this.capability(id, cap, action, value));
   }
 
   /** Devices whose profile offers a capability, e.g. every tuner for the TV guide. */
   withCapability(cap: keyof Capabilities): string[] {
     return [...this.runtimes.values()].filter((rt) => rt.profile.capabilities[cap]).map((rt) => rt.device.id);
   }
+}
+
+/**
+ * Starts `run` for each device in order, `gapMs` apart, without waiting for
+ * each to finish: panels still power up one by one (no inrush all at once),
+ * but a 20-panel wall doesn't wait for every TV to confirm before the next.
+ * Failures are collected per device.
+ */
+async function staggered(ids: string[], gapMs: number, run: (id: string) => Promise<unknown>) {
+  const jobs: Promise<string | undefined>[] = [];
+  for (const [i, id] of ids.entries()) {
+    if (i > 0) await sleep(gapMs);
+    jobs.push(run(id).then(() => undefined, (err) => `${id}: ${err instanceof Error ? err.message : err}`));
+  }
+  const errors = (await Promise.all(jobs)).filter((e): e is string => !!e);
+  if (errors.length) throw new Error(errors.join("; "));
 }
 
 /** Applies defaults and checks a device's settings against its profile's fields. */

@@ -8,6 +8,7 @@ import { identityStore, resetIdentity } from "../src/transports/androidtv/cert.t
 import { keyCode } from "../src/transports/androidtv/keycodes.ts";
 import { Deframer, decode, encode, frame, msg, num } from "../src/transports/androidtv/protobuf.ts";
 import { AndroidTvConnection, finishPairing, startPairing } from "../src/transports/androidtv/remote.ts";
+import { scanAndroidTvs } from "../src/transports/androidtv/scan.ts";
 import { FakeTv } from "./fake-android-tv.ts";
 
 const until = async (ok: () => boolean, ms = 4000) => {
@@ -126,6 +127,18 @@ test("refuses to toggle when the TV never reported its power", async () => {
     assert.deepEqual(tv.keys, []);
   } finally {
     conn.close();
+    tv.stop();
+  }
+});
+
+test("network scan finds a TV listening on the remote port", async () => {
+  const tv = new FakeTv();
+  await tv.start();
+  try {
+    const found = await scanAndroidTvs(["127.0.0"], tv.remotePort);
+    assert.deepEqual(found.map((f) => f.host), ["127.0.0.1"]);
+    await assert.rejects(scanAndroidTvs(["192.168"]), /isn't a network/);
+  } finally {
     tv.stop();
   }
 });

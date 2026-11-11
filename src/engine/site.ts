@@ -49,6 +49,10 @@ export const SiteSchema = z.object({
       kind: z.enum(["wall", "zone", "other"]).default("other"),
       devices: z.array(z.string()),
       staggerMs: z.number().int().nonnegative().default(250),
+      // How many panels across, so the panel shows the wall's real shape.
+      columns: z.number().int().min(1).max(16).optional(),
+      // The mosaic engine wall that plays content on these panels.
+      mosaic: z.object({ device: z.string(), group: z.string().min(1) }).optional(),
     }))
     .default([]),
   scenes: z.array(z.object({ id: Id, name: z.string(), description: z.string().optional(), steps: z.array(SceneStep) })).default([]),
@@ -89,7 +93,10 @@ export function checkSite(site: Site): string[] {
     if (d.room && !rooms.has(d.room)) errors.push(`device ${d.id}: unknown room "${d.room}"`);
     if (!locations.has(d.location)) errors.push(`device ${d.id}: unknown location "${d.location}"`);
   }
-  for (const g of site.groups) for (const id of g.devices) if (!devices.has(id)) errors.push(`group ${g.id}: unknown device "${id}"`);
+  for (const g of site.groups) {
+    for (const id of g.devices) if (!devices.has(id)) errors.push(`group ${g.id}: unknown device "${id}"`);
+    if (g.mosaic && !devices.has(g.mosaic.device)) errors.push(`group ${g.id}: unknown mosaic device "${g.mosaic.device}"`);
+  }
   for (const s of site.scenes) {
     for (const step of s.steps) {
       if (step.type === "command") {

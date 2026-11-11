@@ -1,6 +1,7 @@
 import { hostname } from "node:os";
 import { learnOnce } from "./learn.ts";
 import { pairStep } from "./transports/androidtv/remote.ts";
+import { scanAndroidTvs, simulatedTvs } from "./transports/androidtv/scan.ts";
 import type { AgentToServer, ServerToAgent, WirePayload } from "./link-protocol.ts";
 import { type Connection, type RenderedPayload, createConnection } from "./transports/index.ts";
 
@@ -122,6 +123,14 @@ export class AgentLink {
         try {
           await pairStep(msg.host, msg.step, msg.code, this.opts.simulate);
           this.send({ type: "reply", reqId: msg.reqId, ok: true });
+        } catch (err) {
+          this.send({ type: "reply", reqId: msg.reqId, ok: false, error: err instanceof Error ? err.message : String(err) });
+        }
+        break;
+      case "atv.scan":
+        try {
+          const found = this.opts.simulate ? simulatedTvs() : await scanAndroidTvs(msg.subnets);
+          this.send({ type: "reply", reqId: msg.reqId, ok: true, text: JSON.stringify(found) });
         } catch (err) {
           this.send({ type: "reply", reqId: msg.reqId, ok: false, error: err instanceof Error ? err.message : String(err) });
         }

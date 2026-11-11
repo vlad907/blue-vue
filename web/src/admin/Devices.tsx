@@ -3,6 +3,7 @@ import { adminApi, slugify, type LogEntry, type SiteDevice } from "./adminApi.ts
 import { useDraft } from "./draft.tsx";
 import { Check, Field, ParamsForm, Pick, SettingsForm, Text, defaultSettings } from "./forms.tsx";
 import { useLive } from "./live.tsx";
+import { AddTvs, PairControls, usePairing } from "./Tvs.tsx";
 
 const CATEGORY_LABELS: Record<string, string> = {
   display: "Displays", tuner: "Tuners", audio: "Audio", "video-wall": "Video walls", switcher: "Switchers",
@@ -13,6 +14,7 @@ export function Devices() {
   const { site, update, profiles, dirty } = useDraft();
   const state = useLive();
   const [editing, setEditing] = useState<string | null>(null); // device id, or "" for a new one
+  const [addingTvs, setAddingTvs] = useState(false);
   const [testing, setTesting] = useState<string>();
 
   const agentName = (id: string) => (id === "server" ? "Control server" : site.agents.find((a) => a.id === id)?.name ?? id);
@@ -23,7 +25,10 @@ export function Devices() {
       <div>
         <div className="row-between">
           <h2>Devices</h2>
-          <button className="btn primary" onClick={() => setEditing("")}>+ Add device</button>
+          <span className="row-tight">
+            <button className="btn" onClick={() => { setEditing(null); setTesting(undefined); setAddingTvs(true); }}>+ Add TVs</button>
+            <button className="btn primary" onClick={() => { setAddingTvs(false); setEditing(""); }}>+ Add device</button>
+          </span>
         </div>
         <table className="atable">
           <thead>
@@ -43,7 +48,7 @@ export function Devices() {
                   <td><span className={`pill ${cls}`} title={status}>{status.length > 28 ? status.slice(0, 28) + "…" : status}</span></td>
                   <td className="actions">
                     <button className="btn small" onClick={() => setEditing(d.id)}>Edit</button>
-                    <button className="btn small" disabled={!live || live.problem !== undefined} onClick={() => setTesting(testing === d.id ? undefined : d.id)}>Test</button>
+                    <button className="btn small" disabled={!live || live.problem !== undefined} onClick={() => { setAddingTvs(false); setTesting(testing === d.id ? undefined : d.id); }}>Test</button>
                   </td>
                 </tr>
               );
@@ -53,6 +58,7 @@ export function Devices() {
         {!site.devices.length && <p className="empty">No devices yet.</p>}
       </div>
 
+      {addingTvs && editing === null && <AddTvs onClose={() => setAddingTvs(false)} />}
       {editing !== null && (
         <DeviceEditor
           key={editing}
@@ -76,7 +82,7 @@ export function Devices() {
           }
         />
       )}
-      {testing && editing === null && <DeviceConsole id={testing} unsaved={dirty} onClose={() => setTesting(undefined)} />}
+      {testing && editing === null && !addingTvs && <DeviceConsole id={testing} unsaved={dirty} onClose={() => setTesting(undefined)} />}
     </div>
   );
 }
@@ -245,56 +251,14 @@ function DeviceConsole({ id, unsaved, onClose }: { id: string; unsaved: boolean;
  */
 function PairPanel({ id, unsaved, paired }: { id: string; unsaved: boolean; paired: boolean }) {
   const { notice } = useDraft();
-  const [phase, setPhase] = useState<"idle" | "starting" | "code" | "sending">("idle");
-  const [code, setCode] = useState("");
-  const [error, setError] = useState<string>();
-
-  const run = async (fn: () => Promise<unknown>, next: typeof phase, busy: typeof phase) => {
-    setError(undefined);
-    setPhase(busy);
-    try {
-      await fn();
-      setPhase(next);
-      return true;
-    } catch (err) {
-      setError((err as Error).message);
-      setPhase(busy === "sending" ? "code" : "idle");
-      return false;
-    }
-  };
-
+  const p = usePairing(id, () => notice("Paired. The TV connects within a few seconds."));
   return (
     <>
       <h3 className="section">Pairing</h3>
-      {paired && phase === "idle" && <p className="help">Connected, so this TV is paired. Pair again only if the TV was reset or shows as offline with a certificate error.</p>}
+      {paired && p.phase === "idle" && <p className="help">Connected, so this TV is paired. Pair again only if the TV was reset or shows as offline with a certificate error.</p>}
       {unsaved && <p className="help">Save & apply first if you just changed this device's IP address.</p>}
-      {phase === "idle" || phase === "starting" ? (
-        <button className="btn" disabled={phase === "starting"} onClick={() => run(() => adminApi.pair(id, "start"), "code", "starting")}>
-          {phase === "starting" ? "Asking the TV…" : "Pair with this TV"}
-        </button>
-      ) : (
-        <div className="aform inline">
-          <Field label="Code on the TV" help="6 characters, shown on the TV screen now">
-            <input className="mono" type="text" maxLength={6} autoFocus value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} />
-          </Field>
-          <div className="row-tight">
-            <button
-              className="btn primary"
-              disabled={code.length !== 6 || phase === "sending"}
-              onClick={async () => {
-                if (await run(() => adminApi.pair(id, "finish", code), "idle", "sending")) {
-                  setCode("");
-                  notice("Paired. The TV connects within a few seconds.");
-                }
-              }}
-            >
-              {phase === "sending" ? "Pairing…" : "Pair"}
-            </button>
-            <button className="btn" onClick={() => { void adminApi.pair(id, "cancel").catch(() => {}); setPhase("idle"); setCode(""); }}>Cancel</button>
-          </div>
-        </div>
-      )}
-      {error && <p className="bad-text">{error}</p>}
+      <PairControls p={p} startLabel="Pair with this TV" />
+      {p.error && <p className="bad-text">{p.error}</p>}
     </>
   );
 }

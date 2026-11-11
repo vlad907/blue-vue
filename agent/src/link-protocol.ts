@@ -41,6 +41,8 @@ export type ServerToAgent =
   // Puts an iTach near this wall into learning mode; the reply text is the learned sendir code.
   | { type: "ir.learn"; reqId: number; host: string; port?: number; timeoutMs: number }
   // Android TV remote pairing with a TV near this wall: "start" makes the TV show a code, "finish" sends it.
-  | { type: "atv.pair"; reqId: number; host: string; step: "start" | "finish" | "cancel"; code?: string };
+  | { type: "atv.pair"; reqId: number; host: string; step: "start" | "finish" | "cancel"; code?: string }
+  // Looks for Android / Google TVs on this wall's network; the reply text is JSON (FoundTv[]).
+  | { type: "atv.scan"; reqId: number; subnets?: string[] };
 
 export const PROTOCOL_VERSION = "1";
