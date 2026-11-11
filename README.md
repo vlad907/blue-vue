@@ -49,6 +49,8 @@ powershell -ExecutionPolicy Bypass -File .\install-server.ps1
 ```
 This installs Blue Vue as a background task that starts with Windows and restarts if it stops. Program files go to `C:\Program Files\BlueVue`, and data to `C:\ProgramData\BlueVue`, readable by Administrators only. It also opens port 8080 for Private and Domain networks and prints the panel and admin addresses. Open the admin right away and set its password, since whoever opens it first sets it. To update, run the installer from a newer zip; your data is kept. The package includes its own Node, so nothing else needs installing. `install-server.ps1 -GracenoteKey <key>` stores the TV guide key; `uninstall-server.ps1` removes it. The zip's README.txt has the details.
 
+**Two network cards** (say one for the office and one for the AV network): by default Blue Vue answers on every network. To answer on only some, open the admin's **Settings → Network cards**, choose **Only these** and tick the cards. It applies right away, with no restart, and the admin warns you before you cut off the browser you're using. The PC itself can always reach Blue Vue at `http://localhost:8080`. The installer takes the same choice with `-Listen "Ethernet 2"`. Devices are reached on whichever network they're on, and wake-on-LAN goes out on every network card.
+
 ### Mac app
 ```bash
 npm run package:mac        # -> release/mac/Blue Vue-<version>-arm64.dmg (Apple silicon) and Blue Vue-<version>.dmg (Intel)

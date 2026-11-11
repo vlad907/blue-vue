@@ -8,6 +8,7 @@ param(
     [string]$InstallDir = "$env:ProgramFiles\BlueVue",
     [string]$DataDir = "$env:ProgramData\BlueVue",
     [string]$GracenoteKey,           # optional: TV guide API key, stored in the data folder's .env
+    [string[]]$Listen,               # optional: network card names or IPs to answer on, e.g. "Ethernet 2". Default: every network
     [string]$TaskName = "BlueVueServer"
 )
 $ErrorActionPreference = "Stop"
@@ -71,14 +72,19 @@ icacls $DataDir /inheritance:r /grant:r "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-18:(OI
 
 if (Test-Path $config) {
     $cfg = Get-Content $config -Raw | ConvertFrom-Json
-    $cfg.server.port = $Port
+    $cfg.server | Add-Member -NotePropertyName port -NotePropertyValue $Port -Force
 } else {
-    $cfg = [ordered]@{
-        server = [ordered]@{ port = $Port }
+    $cfg = [pscustomobject][ordered]@{
+        server = [pscustomobject][ordered]@{ port = $Port }
         simulate = $false
         dataDir = (Join-Path $DataDir "data")
-        guide = [ordered]@{ enabled = $true; apiKeyEnv = "GRACENOTE_API_KEY"; lineupId = ""; hours = 6; refreshMinutes = 30 }
+        guide = [pscustomobject][ordered]@{ enabled = $true; apiKeyEnv = "GRACENOTE_API_KEY"; lineupId = ""; hours = 6; refreshMinutes = 30 }
     }
+}
+if ($PSBoundParameters.ContainsKey("Listen")) {
+    $names = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | ForEach-Object { $_.InterfaceAlias; $_.IPAddress }
+    foreach ($l in $Listen) { if ($names -notcontains $l) { Write-Warning "No network card or address '$l' on this PC right now. Blue Vue will start answering on it when it appears." } }
+    $cfg.server | Add-Member -NotePropertyName interfaces -NotePropertyValue @($Listen) -Force
 }
 $cfg | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 $config
 $Port = [int]$cfg.server.port
@@ -124,12 +130,16 @@ if (-not $hello) {
     exit 1
 }
 
-$ips = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-    Where-Object { $_.IPAddress -notmatch "^(127\.|169\.254\.)" } | Select-Object -ExpandProperty IPAddress
+$nics = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -notmatch "^(127\.|169\.254\.)" }
+$chosen = @($cfg.server.interfaces | Where-Object { $_ })
+if ($chosen.Count) { $nics = $nics | Where-Object { $chosen -contains $_.InterfaceAlias -or $chosen -contains $_.IPAddress } }
+$ips = $nics | Select-Object -ExpandProperty IPAddress
 Write-Host ""
 Write-Host "Blue Vue $($hello.version) is running for '$($hello.name)'." -ForegroundColor Green
 foreach ($ip in $ips) { Write-Host "  Panel: http://${ip}:$Port      Admin: http://${ip}:$Port/admin" }
 Write-Host ""
+if ($chosen.Count) { Write-Host "Answering only on: $($chosen -join ', '). Change it in the admin under Settings > Network cards." }
+else { Write-Host "Answering on every network. To pick one network card, see the admin's Settings > Network cards, or re-run with -Listen `"Ethernet 2`"." }
 Write-Host "Next: open the admin now and set its password (the first visitor sets it)." -ForegroundColor Yellow
 if ($Port -ne 8080) { Write-Host "Wall PCs: install their agents with -ServerPort $Port." }
 Write-Host "Data and logs: $DataDir"

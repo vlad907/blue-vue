@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { createSocket, type Socket as UdpSocket } from "node:dgram";
+import { networkInterfaces } from "node:os";
 import { promisify } from "node:util";
 import { GlobalCacheTransmitter, parsePronto } from "../ir.ts";
 import { Connection, type ConnectionSettings, type RenderedPayload, type TransportConfig, describe, requireSetting } from "./types.ts";
@@ -181,22 +182,35 @@ export class WolConnection extends Connection {
     this.setOnline(false);
   }
 
-  send(p: RenderedPayload) {
+  async send(p: RenderedPayload) {
     if (p.kind !== "wol") throw new Error(`WOL can't send ${p.kind} payloads`);
     const packet = Buffer.concat([Buffer.alloc(6, 0xff), ...Array(16).fill(this.mac)]);
+    // 255.255.255.255 leaves through one network card only, so also send to
+    // each card's own network (e.g. 192.168.1.255) to reach TVs on any of them.
+    const targets = ["255.255.255.255", ...broadcastAddresses()];
     const sock = createSocket("udp4");
-    return new Promise<undefined>((resolve, reject) => {
-      sock.bind(() => {
-        sock.setBroadcast(true);
-        sock.send(packet, 9, "255.255.255.255", (err) => {
-          sock.close();
-          if (err) return reject(err);
-          this.log("tx", describe(p));
-          resolve(undefined);
-        });
-      });
-    });
+    await new Promise<void>((resolve) => sock.bind(() => resolve()));
+    sock.setBroadcast(true);
+    const results = await Promise.allSettled(targets.map((t) => new Promise<void>((res, rej) => sock.send(packet, 9, t, (err) => (err ? rej(err) : res())))));
+    sock.close();
+    if (results.every((r) => r.status === "rejected")) throw (results[0] as PromiseRejectedResult).reason;
+    this.log("tx", `${describe(p)} to ${targets.join(", ")}`);
+    return undefined;
   }
+}
+
+/** The directed broadcast address of each IPv4 network this machine is on. */
+export function broadcastAddresses(): string[] {
+  const out = new Set<string>();
+  for (const list of Object.values(networkInterfaces())) {
+    for (const ni of list ?? []) {
+      if (ni.family !== "IPv4" || ni.internal) continue;
+      const ip = ni.address.split(".").map(Number);
+      const mask = ni.netmask.split(".").map(Number);
+      out.add(ip.map((b, i) => (b | (~mask[i] & 255)) & 255).join("."));
+    }
+  }
+  return [...out];
 }
 
 /** Stand-in used in simulation mode: logs what would be sent. */

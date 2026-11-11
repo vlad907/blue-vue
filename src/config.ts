@@ -5,7 +5,14 @@ import { z } from "zod";
 // Server bootstrap settings only. Devices, rooms, walls, scenes and channels
 // live in the site (data/site.json), which is edited in the admin UI.
 export const ConfigSchema = z.object({
-  server: z.object({ host: z.string().default("0.0.0.0"), port: z.number().int().default(8080) }).default({}),
+  server: z
+    .object({
+      host: z.string().default("0.0.0.0"), // older setting: one address to listen on
+      port: z.number().int().default(8080),
+      // Network card names ("Ethernet 2") or IPv4 addresses to answer on; empty means every network.
+      interfaces: z.array(z.string()).default([]),
+    })
+    .default({}),
   simulate: z.boolean().default(false),
   dataDir: z.string().default("data"),
   guide: z
@@ -21,6 +28,12 @@ export const ConfigSchema = z.object({
 });
 
 export type Config = z.infer<typeof ConfigSchema> & { file: string };
+
+/** The network cards to answer on, honouring the older single `host` setting. */
+export function listenInterfaces(cfg: Config): string[] {
+  if (cfg.server.interfaces.length) return cfg.server.interfaces;
+  return cfg.server.host && cfg.server.host !== "0.0.0.0" ? [cfg.server.host] : [];
+}
 
 export function loadConfig(path?: string): Config {
   const candidates = [path, process.env.BLUEVUE_CONFIG, "config/system.local.json", "config/system.json"]

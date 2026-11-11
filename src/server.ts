@@ -9,6 +9,7 @@ import type { Config } from "./config.ts";
 import type { Engine } from "./engine/index.ts";
 import type { Capabilities } from "./engine/profile-schema.ts";
 import type { GracenoteGuide } from "./guide/gracenote.ts";
+import type { InterfaceListener } from "./listen.ts";
 import { APP_ROOT, VERSION } from "./paths.ts";
 import type { StateStore } from "./state.ts";
 
@@ -17,11 +18,13 @@ interface Deps {
   state: StateStore;
   engine: Engine;
   guide: GracenoteGuide;
+  /** Controls which network cards the server answers on (absent in tests). */
+  network?: () => InterfaceListener | undefined;
 }
 
 export const WEB_DIST = join(APP_ROOT, "web", "dist");
 
-export async function buildServer({ cfg, state, engine, guide }: Deps) {
+export async function buildServer({ cfg, state, engine, guide, network }: Deps) {
   const app = Fastify({ logger: { level: "warn" } });
   await app.register(fastifyWebsocket);
 
@@ -36,7 +39,7 @@ export async function buildServer({ cfg, state, engine, guide }: Deps) {
     );
   }
 
-  registerAdminRoutes(app, cfg, engine);
+  registerAdminRoutes(app, cfg, engine, network);
 
   app.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
     const status = err instanceof z.ZodError ? 400 : (err.statusCode ?? 500);

@@ -6,6 +6,8 @@ Install as a service (starts with Windows, restarts if it stops)
   2. Open PowerShell as Administrator in this folder and run:
        powershell -ExecutionPolicy Bypass -File .\install-server.ps1
      Options: -Port <port>   -GracenoteKey <key> (TV guide)
+              -Listen "Ethernet 2"  answer only on that network card (name or IP;
+                                    several allowed). Also in the admin: Settings.
      Blue Vue uses port 8080. If something else already has it, the
      installer picks 8088 (or 8180, 8280) and tells you.
   3. Open the admin address it prints (http://<this PC>:<port>/admin) and

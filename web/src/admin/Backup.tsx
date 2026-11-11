@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { adminApi } from "./adminApi.ts";
+import { ApiError, adminApi, type NetworkInfo } from "./adminApi.ts";
 import { useDraft } from "./draft.tsx";
 import { Field, Text } from "./forms.tsx";
 
@@ -102,6 +102,7 @@ export function Settings({ onSignOut }: { onSignOut: () => void }) {
           </Field>
         </div>
       </section>
+      <NetworkCards />
       <section className="card">
         <h3>Admin password</h3>
         <div className="aform two">
@@ -123,5 +124,87 @@ export function Settings({ onSignOut }: { onSignOut: () => void }) {
       </section>
       <button className="btn" onClick={() => adminApi.logout().then(onSignOut)}>Sign out</button>
     </div>
+  );
+}
+
+/**
+ * Which of the PC's network cards Blue Vue answers on: every network, or only
+ * some (e.g. the AV network, not the office one). Applies right away.
+ */
+function NetworkCards() {
+  const { notice } = useDraft();
+  const [info, setInfo] = useState<NetworkInfo>();
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const load = () =>
+    adminApi.network().then((i) => {
+      setInfo(i);
+      setChosen(i.status?.interfaces ?? []);
+    }, () => {});
+  useEffect(() => {
+    void load();
+  }, []);
+  if (!info) return null;
+  if (!info.status) return null; // tests and older setups that don't control listening
+
+  const all = chosen.length === 0;
+  const saved = info.status.interfaces;
+  const changed = JSON.stringify([...chosen].sort()) !== JSON.stringify([...saved].sort());
+  // Cards that are configured but not present right now still show, so they can be unticked.
+  const names = [...new Set([...info.nics.map((n) => n.name), ...saved.filter((s) => !info.nics.some((n) => n.name === s || n.addresses.includes(s)))])];
+
+  const save = async (force = false) => {
+    setSaving(true);
+    try {
+      await adminApi.setNetwork(chosen, force);
+      notice(all ? "Blue Vue now answers on every network" : `Blue Vue now answers only on ${chosen.join(", ")}`);
+      await load();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409 && !force && confirm(err.message)) return save(true);
+      notice((err as Error).message, true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="card">
+      <h3>Network cards</h3>
+      <p className="help">
+        Choose which of this PC's networks panels, laptops and wall PCs reach Blue Vue on (port {info.status.port}). Devices are
+        still controlled on whichever network they're on. The PC itself can always open Blue Vue at http://localhost:{info.status.port}.
+      </p>
+      <label className="acheck">
+        <input type="radio" checked={all} onChange={() => setChosen([])} />
+        Every network
+      </label>
+      <label className="acheck">
+        <input type="radio" checked={!all} onChange={() => setChosen(all ? [info.nics.find((n) => n.addresses.includes(info.via))?.name ?? info.nics[0]?.name].filter(Boolean) as string[] : chosen)} />
+        Only these:
+      </label>
+      {!all && (
+        <div className="nic-list">
+          {names.map((name) => {
+            const nic = info.nics.find((n) => n.name === name);
+            const here = nic?.addresses.includes(info.via);
+            return (
+              <label key={name} className="acheck">
+                <input type="checkbox" checked={chosen.includes(name)} onChange={(e) => setChosen(e.target.checked ? [...chosen, name] : chosen.filter((c) => c !== name))} />
+                <b>{name}</b>
+                <span className="muted">{nic ? nic.addresses.join(", ") : "not connected now"}</span>
+                {here && <span className="pill ok">this browser</span>}
+              </label>
+            );
+          })}
+        </div>
+      )}
+      <p className="help">
+        Answering on: {info.status.listening.map((a) => (a === "0.0.0.0" ? "every network" : a)).join(", ") || "nothing"}
+        {info.status.problems.map((p) => <span key={p} className="bad-text"><br />{p}</span>)}
+      </p>
+      <button className="btn" disabled={!changed || saving || (!all && !chosen.length)} onClick={() => void save()}>
+        {saving ? "Applying…" : "Apply"}
+      </button>
+    </section>
   );
 }

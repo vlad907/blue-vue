@@ -38,6 +38,19 @@ export interface SiteGroup {
   mosaic?: { device: string; group: string };
 }
 
+export interface ListenStatus {
+  port: number;
+  interfaces: string[];
+  listening: string[];
+  problems: string[];
+}
+
+export interface NetworkInfo {
+  nics: { name: string; addresses: string[] }[];
+  status: ListenStatus | null;
+  via: string; // the server address this browser reached
+}
+
 export interface FoundTv {
   host: string;
   name?: string;
@@ -140,6 +153,8 @@ export const adminApi = {
     call<{ ok: boolean; simulated: boolean }>("POST", `/api/admin/devices/${encodeURIComponent(id)}/pair`, { step, code }),
   discoverTvs: (location: string, subnet?: string) =>
     call<{ found: FoundTv[]; subnets: string[]; simulated: boolean }>("POST", "/api/admin/discover/androidtv", { location, subnet }),
+  network: () => call<NetworkInfo>("GET", "/api/admin/network"),
+  setNetwork: (interfaces: string[], force = false) => call<{ status: ListenStatus }>("PUT", "/api/admin/network", { interfaces, force }),
   learnIr: (location: string, irHost: string) => call<{ pronto: string }>("POST", "/api/admin/ir/learn", { location, irHost }),
   profiles: () => call<ProfileEntry[]>("GET", "/api/v2/profiles"),
   profile: (id: string) => call<Profile>("GET", `/api/v2/profiles/${id}`),

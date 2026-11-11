@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Config } from "../config.ts";
@@ -7,13 +8,14 @@ import { type Site, SiteSchema } from "../engine/site.ts";
 import { lintScenes } from "../engine/site-lint.ts";
 import { AdminAuth, COOKIE, readCookie, sessionCookie } from "./auth.ts";
 import { registerProfileRoutes } from "./profile-routes.ts";
+import { type InterfaceListener, listNics, resolveInterfaces } from "../listen.ts";
 
 const hashOf = (site: Site) => createHash("sha256").update(JSON.stringify(site)).digest("hex").slice(0, 16);
 
 const BACKUP_FORMAT = "blue-vue-backup";
 
 /** Admin API: everything that changes the site. Every route except login/setup needs a session. */
-export function registerAdminRoutes(app: FastifyInstance, cfg: Config, engine: Engine) {
+export function registerAdminRoutes(app: FastifyInstance, cfg: Config, engine: Engine, network?: () => InterfaceListener | undefined) {
   const auth = new AdminAuth(cfg.dataDir);
   const sessionOf = (req: FastifyRequest) => readCookie(req.headers.cookie, COOKIE);
   const fail = (status: number, message: string) => Object.assign(new Error(message), { statusCode: status });
@@ -64,6 +66,40 @@ export function registerAdminRoutes(app: FastifyInstance, cfg: Config, engine: E
     });
 
     registerProfileRoutes(admin, engine);
+
+    // --- Which network cards Blue Vue answers on ---------------------------------
+    const localAddressOf = (req: FastifyRequest) => (req.socket.localAddress ?? "").replace(/^::ffff:/, "");
+    admin.get("/api/admin/network", async (req) => ({
+      nics: listNics(),
+      status: network?.()?.status() ?? null,
+      via: localAddressOf(req),
+    }));
+
+    admin.put("/api/admin/network", async (req) => {
+      const { interfaces, force } = z.object({ interfaces: z.array(z.string().min(1)).max(16), force: z.boolean().default(false) }).parse(req.body);
+      const listener = network?.();
+      if (!listener) throw fail(409, "This server can't change its network cards while running");
+      // Don't let the admin cut off the browser they're using without saying so.
+      const via = localAddressOf(req);
+      const local = via === "127.0.0.1" || via === "::1";
+      if (interfaces.length && !local && !force && !resolveInterfaces(interfaces).addresses.includes(via)) {
+        throw fail(409, `You're connected through ${via}, which isn't one of the chosen network cards, so this page would stop working. Include it, or confirm to go ahead.`);
+      }
+      const previous = listener.status().interfaces;
+      try {
+        await listener.apply(interfaces);
+      } catch (err) {
+        await listener.apply(previous).catch(() => {}); // put the old choice back so the server stays reachable
+        throw fail(400, err instanceof Error ? err.message : String(err));
+      }
+      // Keep it for restarts, leaving the rest of the settings file alone.
+      const raw = JSON.parse(readFileSync(cfg.file, "utf8"));
+      raw.server = { ...(raw.server ?? {}), interfaces };
+      delete raw.server.host;
+      writeFileSync(cfg.file, JSON.stringify(raw, null, 2) + "\n");
+      cfg.server.interfaces = interfaces;
+      return { status: listener.status() };
+    });
 
     admin.post("/api/admin/password", async (req, reply) => {
       const { current, next } = z.object({ current: z.string(), next: z.string() }).parse(req.body);

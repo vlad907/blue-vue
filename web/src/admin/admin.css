@@ -127,3 +127,5 @@ input.invalid { outline: 2px solid var(--bad); }
 .card.inset { background: var(--panel-2); margin-top: 8px; }
 .checklist { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 12px; margin: 10px 0; max-height: 280px; overflow-y: auto; }
 .atable td b { white-space: nowrap; }
+.nic-list { margin: 4px 0 4px 26px; display: flex; flex-direction: column; gap: 4px; }
+.nic-list .acheck { gap: 8px; }
