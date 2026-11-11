@@ -4,7 +4,7 @@
 #   powershell -ExecutionPolicy Bypass -File .\install-server.ps1
 # Re-run it from a newer package to update; settings and data are kept.
 param(
-    [int]$Port = 8080,
+    [int]$Port = 8080,               # if 8080 is taken and no -Port is given, the first free of 8088, 8180, 8280 is used
     [string]$InstallDir = "$env:ProgramFiles\BlueVue",
     [string]$DataDir = "$env:ProgramData\BlueVue",
     [string]$GracenoteKey,           # optional: TV guide API key, stored in the data folder's .env
@@ -19,6 +19,32 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 }
 if (-not (Test-Path (Join-Path $src "app\server.mjs"))) { throw "Run this from the unzipped BlueVue-Server folder." }
 if ($Port -eq 8090) { throw "Port 8090 is the mosaic engine's. Pick another port." }
+
+# A port is free if nothing listens on it, or only an earlier Blue Vue does.
+function Get-PortOwner([int]$p) {
+    $listener = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $listener) { return $null }
+    $proc = Get-CimInstance Win32_Process -Filter "ProcessId = $($listener.OwningProcess)" -ErrorAction SilentlyContinue
+    if ($proc -and $proc.ExecutablePath -and $proc.ExecutablePath.StartsWith($InstallDir, [StringComparison]::OrdinalIgnoreCase)) { return $null }
+    if ($proc) { return "$($proc.Name) (process $($proc.ProcessId))" }
+    return "process $($listener.OwningProcess)"
+}
+
+# An existing install keeps its port unless -Port is given.
+$config = Join-Path $DataDir "system.json"
+if (-not $PSBoundParameters.ContainsKey("Port") -and (Test-Path $config)) {
+    $Port = [int](Get-Content $config -Raw | ConvertFrom-Json).server.port
+}
+$owner = Get-PortOwner $Port
+if ($owner) {
+    if ($PSBoundParameters.ContainsKey("Port")) {
+        throw "Port $Port is already used by $owner. Pick another, e.g. -Port 8088."
+    }
+    $taken = $Port
+    $Port = (8088, 8180, 8280 | Where-Object { -not (Get-PortOwner $_) } | Select-Object -First 1)
+    if (-not $Port) { throw "Port $taken and the alternates are in use. Pick a free port with -Port." }
+    Write-Host "Port $taken is used by $owner, so Blue Vue will use port $Port." -ForegroundColor Yellow
+}
 
 # Stop the running server before replacing its files.
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
@@ -43,10 +69,9 @@ if ((Resolve-Path $src).Path.TrimEnd("\") -ne $InstallDir.TrimEnd("\")) {
 New-Item -ItemType Directory -Force (Join-Path $DataDir "logs") | Out-Null
 icacls $DataDir /inheritance:r /grant:r "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" | Out-Null
 
-$config = Join-Path $DataDir "system.json"
 if (Test-Path $config) {
     $cfg = Get-Content $config -Raw | ConvertFrom-Json
-    if ($PSBoundParameters.ContainsKey("Port")) { $cfg.server.port = $Port }
+    $cfg.server.port = $Port
 } else {
     $cfg = [ordered]@{
         server = [ordered]@{ port = $Port }
@@ -106,5 +131,6 @@ Write-Host "Blue Vue $($hello.version) is running for '$($hello.name)'." -Foregr
 foreach ($ip in $ips) { Write-Host "  Panel: http://${ip}:$Port      Admin: http://${ip}:$Port/admin" }
 Write-Host ""
 Write-Host "Next: open the admin now and set its password (the first visitor sets it)." -ForegroundColor Yellow
+if ($Port -ne 8080) { Write-Host "Wall PCs: install their agents with -ServerPort $Port." }
 Write-Host "Data and logs: $DataDir"
 Write-Host "The network must be set to Private in Windows for laptops and panels to connect."

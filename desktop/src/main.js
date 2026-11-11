@@ -9,6 +9,8 @@ const { join } = require("node:path");
 const { networkInterfaces } = require("node:os");
 
 const DEFAULT_PORT = 8080;
+// The server installer falls back to these when 8080 is taken.
+const SCAN_PORTS = [8080, 8088, 8180, 8280];
 let win;
 let current; // { url, name } of the connected server
 
@@ -54,7 +56,7 @@ async function hello(url, timeoutMs = 3000) {
 
 // --- Finding servers on the local network ------------------------------------
 
-/** Every address on this Mac's private IPv4 networks (each as a /24), probed on port 8080. */
+/** Every address on this Mac's private IPv4 networks (each as a /24), probed on the usual Blue Vue ports. */
 async function scan() {
   const prefixes = new Set();
   for (const list of Object.values(networkInterfaces())) {
@@ -65,7 +67,7 @@ async function scan() {
     }
   }
   const targets = [];
-  for (const p of prefixes) for (let i = 1; i < 255; i++) targets.push(`http://${p}.${i}:${DEFAULT_PORT}`);
+  for (const p of prefixes) for (let i = 1; i < 255; i++) for (const port of SCAN_PORTS) targets.push(`http://${p}.${i}:${port}`);
   const found = [];
   let next = 0;
   const worker = async () => {
@@ -78,8 +80,8 @@ async function scan() {
       }
     }
   };
-  await Promise.all(Array.from({ length: 64 }, worker));
-  return { found, networks: [...prefixes].map((p) => `${p}.x`) };
+  await Promise.all(Array.from({ length: 160 }, worker));
+  return { found, networks: [...prefixes].map((p) => `${p}.x`), ports: SCAN_PORTS };
 }
 
 // --- Windows -----------------------------------------------------------------

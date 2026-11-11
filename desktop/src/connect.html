@@ -53,7 +53,7 @@
       <input id="address" placeholder="Server address, e.g. 192.168.1.20" autocomplete="off" spellcheck="false" autofocus />
       <button class="primary" id="go">Connect</button>
     </form>
-    <p class="muted">Port 8080 is assumed unless you add one, e.g. 192.168.1.20:9000.</p>
+    <p class="muted">Port 8080 is assumed unless you add one, e.g. 192.168.1.20:8088.</p>
 
     <section id="recent-section" hidden>
       <h2>Recent</h2>
@@ -66,7 +66,7 @@
         <button id="scan">Find servers</button>
       </div>
       <div class="list" id="found"></div>
-      <p class="muted" id="scan-status">Looks for Blue Vue on port 8080 across this Mac's local network.</p>
+      <p class="muted" id="scan-status">Looks for Blue Vue on ports 8080, 8088, 8180 and 8280 across this Mac's local network.</p>
     </section>
   </main>
   <script src="connect.js"></script>

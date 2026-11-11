@@ -16,6 +16,8 @@ The agent connects **out** to the control server over a WebSocket, so the server
 "server": { "url": "ws://<control-server-ip>:8080/agent" }
 ```
 
+Use the server's port if it isn't 8080 (the server installer prints it). The Windows installer takes it as `-ServerPort`.
+
 The agent's `name` is its id, and its `token` must match that agent's entry in the control server's site (`agents` in `data/site.json`, or the admin UI once it exists). The agent reconnects forever. While it's offline, its devices show as offline and commands fail with a clear "wall agent is offline" error. When it comes back, every device connection is re-opened automatically.
 
 Any profile device can live on a wall: set its **location** to the agent's id. Its TCP, UDP, HTTP, IR (iTach), ADB and **serial** connections are then made from this PC. For RS-232 devices, install serial support once with `install-windows.ps1 -Serial` (or `npm install serialport`), and set the device's `serialPort` setting (e.g. `COM3`) and `baudRate`.

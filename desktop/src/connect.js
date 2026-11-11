@@ -61,13 +61,13 @@ $("scan").addEventListener("click", async () => {
   $("scan-status").textContent = "Looking…";
   $("found").replaceChildren();
   try {
-    const { found, networks } = await window.bluevue.scan();
+    const { found, networks, ports } = await window.bluevue.scan();
     $("found").replaceChildren(...found.map((s) => row(s)));
     $("scan-status").textContent = !networks.length
       ? "This Mac isn't on a local network."
       : found.length
         ? `Searched ${networks.join(", ")}.`
-        : `No Blue Vue server answered on ${networks.join(", ")}. Check the server is running and port 8080 is open in its firewall, or type its address above.`;
+        : `No Blue Vue server answered on ${networks.join(", ")}. Check the server is running and its port (${ports.join(", ")}) is open in its firewall, or type its address and port above.`;
   } catch (err) {
     $("scan-status").textContent = err.message;
   } finally {

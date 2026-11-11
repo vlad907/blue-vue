@@ -4,6 +4,7 @@
 #       -MosaicExe "C:\Program Files\Mosaic\MosaicWall.exe"
 param(
     [Parameter(Mandatory = $true)][string]$ControlServer,   # control server IP; the agent connects out to it
+    [int]$ServerPort = 8080,     # the control server's port, as its installer printed
     [int]$Port = 8095,   # local health check only (8090 is the mosaic engine's)
     [string]$MosaicExe,          # optional: video wall software to launch at logon and keep running
     [string]$WallUser = "$env:USERDOMAIN\$env:USERNAME",
@@ -27,8 +28,8 @@ $config = Join-Path $dir "agent.json"
 if (-not (Test-Path $config)) {
     Copy-Item (Join-Path $dir "agent.example.json") $config
     $token = -join ((48..57) + (97..122) | Get-Random -Count 40 | ForEach-Object { [char]$_ })
-    (Get-Content $config -Raw).Replace("CHANGE-ME-to-a-long-random-string", $token).Replace("10.0.10.5", $ControlServer) | Set-Content $config
-    Write-Host "Created agent.json with a new token, connecting to ws://${ControlServer}:8080/agent." -ForegroundColor Yellow
+    (Get-Content $config -Raw).Replace("CHANGE-ME-to-a-long-random-string", $token).Replace("10.0.10.5:8080", "${ControlServer}:$ServerPort") | Set-Content $config
+    Write-Host "Created agent.json with a new token, connecting to ws://${ControlServer}:$ServerPort/agent." -ForegroundColor Yellow
     Write-Host "Set this wall's id in agent.json (`"name`"), and add the agent with this token on the control server:"
     Write-Host "  $token"
     Write-Host "Then re-run this script."
