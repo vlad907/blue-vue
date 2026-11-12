@@ -78,6 +78,7 @@ export interface Profile {
   category: string;
   description?: string;
   transport: { type: string };
+  discover?: "androidtv" | "roku" | "adb";
   settings: SettingField[];
   commands: Record<string, { label?: string; params: Record<string, Param>; hidden?: boolean }>;
   state: Record<string, { type: string; label?: string }>;
@@ -151,8 +152,8 @@ export const adminApi = {
     call<{ updates?: Record<string, unknown>; problems: string[] }>("POST", "/api/admin/profiles/parse-test", { rules, sample, settings }),
   pair: (id: string, step: "start" | "finish" | "cancel", code?: string) =>
     call<{ ok: boolean; simulated: boolean }>("POST", `/api/admin/devices/${encodeURIComponent(id)}/pair`, { step, code }),
-  discoverTvs: (location: string, subnet?: string) =>
-    call<{ found: FoundTv[]; subnets: string[]; simulated: boolean }>("POST", "/api/admin/discover/androidtv", { location, subnet }),
+  discoverTvs: (location: string, kind: string, subnet?: string) =>
+    call<{ found: FoundTv[]; subnets: string[]; simulated: boolean }>("POST", "/api/admin/discover/tvs", { location, kind, subnet }),
   network: () => call<NetworkInfo>("GET", "/api/admin/network"),
   setNetwork: (interfaces: string[], force = false) => call<{ status: ListenStatus }>("PUT", "/api/admin/network", { interfaces, force }),
   learnIr: (location: string, irHost: string) => call<{ pronto: string }>("POST", "/api/admin/ir/learn", { location, irHost }),

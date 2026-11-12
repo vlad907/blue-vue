@@ -14,6 +14,8 @@ description: >
   keys, but each TV model decides whether to honour them, so test inputs on
   your model before relying on them.
 
+discover: androidtv
+
 transport:
   type: androidtv
   port: 6466

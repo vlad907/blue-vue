@@ -3,6 +3,7 @@ import { createSocket, type Socket as UdpSocket } from "node:dgram";
 import { networkInterfaces } from "node:os";
 import { promisify } from "node:util";
 import { GlobalCacheTransmitter, parsePronto } from "../ir.ts";
+import { AdbClient } from "./adb/client.ts";
 import { Connection, type ConnectionSettings, type RenderedPayload, type TransportConfig, describe, requireSetting } from "./types.ts";
 
 const execFileAsync = promisify(execFile);
@@ -35,6 +36,9 @@ export class HttpConnection extends Connection {
       });
       const text = await res.text();
       this.setOnline(true);
+      if (res.status === 403 && this.base.endsWith(":8060")) {
+        throw new Error(`HTTP 403: the Roku refused. On the TV set Settings > System > Advanced system settings > Control by mobile apps > Network access to Default or Permissive`);
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
       if (text) this.log("rx", text.length > 500 ? text.slice(0, 500) + "…" : text);
       return text;
@@ -131,21 +135,40 @@ export class IrConnection extends Connection {
   }
 }
 
-/** Android TVs over ADB network debugging. */
+/**
+ * Android and Fire TVs over ADB network debugging. Blue Vue speaks ADB
+ * itself; set ADB_PATH to use Android's adb program instead.
+ */
 export class AdbConnection extends Connection {
-  target: string;
-  adb: string;
+  host: string;
+  port: number;
+  adb?: string;
+  private client?: AdbClient;
 
   constructor(cfg: TransportConfig, settings: ConnectionSettings) {
     super();
-    const host = requireSetting(settings.host, "host");
-    this.target = `${host}:${settings.port ?? cfg.port ?? 5555}`;
+    this.host = requireSetting(settings.host, "host");
+    this.port = Number(settings.port ?? cfg.port ?? 5555);
     // Only the configured adb binary can run; profiles can't name programs.
-    this.adb = process.env.ADB_PATH ?? "adb";
+    this.adb = process.env.ADB_PATH || undefined;
   }
 
-  open() {}
+  open() {
+    if (this.adb) return;
+    const c = new AdbClient(this.host, this.port);
+    this.client = c;
+    c.on("approval", () => this.log("info", `Asked the TV to allow debugging from this machine. On the TV, tick "Always allow" and press Allow.`));
+    c.on("state", (st: string) => {
+      if (st === "connected") this.log("info", `ADB connected${c.banner ? ` (${c.banner.slice(0, 120)})` : ""}`);
+      if (st !== "connected") this.setOnline(false);
+    });
+    // Connect now so the TV's prompt shows up right after the device is saved.
+    c.connect().catch((err) => this.log("error", err.message));
+  }
+
   close() {
+    this.client?.close();
+    this.client = undefined;
     this.setOnline(false);
   }
 
@@ -153,10 +176,18 @@ export class AdbConnection extends Connection {
     if (p.kind !== "adb") throw new Error(`ADB can't send ${p.kind} payloads`);
     this.log("tx", describe(p));
     try {
-      await execFileAsync(this.adb, ["connect", this.target], { timeout: 5000 }).catch(() => {});
-      const { stdout } = await execFileAsync(this.adb, ["-s", this.target, "shell", ...p.args], { timeout: 5000, maxBuffer: 4_000_000 });
+      let out: string;
+      if (this.adb) {
+        const target = `${this.host}:${this.port}`;
+        await execFileAsync(this.adb, ["connect", target], { timeout: 5000 }).catch(() => {});
+        out = (await execFileAsync(this.adb, ["-s", target, "shell", ...p.args], { timeout: 5000, maxBuffer: 4_000_000 })).stdout;
+      } else {
+        if (!this.client) this.open();
+        out = await this.client!.shell(p.args.join(" "));
+      }
       this.setOnline(true);
-      return stdout;
+      if (out.trim()) this.log("rx", out.length > 500 ? out.slice(0, 500) + "…" : out.trim());
+      return out;
     } catch (err) {
       this.setOnline(false);
       throw err;

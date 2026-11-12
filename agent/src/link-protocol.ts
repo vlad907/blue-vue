@@ -43,6 +43,6 @@ export type ServerToAgent =
   // Android TV remote pairing with a TV near this wall: "start" makes the TV show a code, "finish" sends it.
   | { type: "atv.pair"; reqId: number; host: string; step: "start" | "finish" | "cancel"; code?: string }
   // Looks for Android / Google TVs on this wall's network; the reply text is JSON (FoundTv[]).
-  | { type: "atv.scan"; reqId: number; subnets?: string[] };
+  | { type: "atv.scan"; reqId: number; subnets?: string[]; kind?: "androidtv" | "roku" | "adb" };
 
 export const PROTOCOL_VERSION = "1";

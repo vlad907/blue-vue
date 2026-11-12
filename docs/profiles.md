@@ -36,6 +36,7 @@ id: acme-projector            # lowercase letters, numbers, dashes
 name: Acme Projector
 manufacturer: Acme
 category: projector           # display, tuner, audio, video-wall, switcher, projector, lighting, other
+discover: roku                # optional: lets "+ Add TVs" find these on the network (androidtv, roku or adb)
 
 transport:
   type: tcp                   # tcp, udp, http, serial, ir, adb, wol, androidtv
@@ -82,7 +83,7 @@ A command is a list of steps, run in order.
 | Send bytes | `hex: "AA 01 {{level \| hex:2}}"` |
 | HTTP request | `http: { method: POST, path: "/api/input/{{input}}", body: '{"on":true}' }` |
 | IR code | `ir: KEY_POWERON` (a name from `irCodes`), plus `repeat: 2` if needed |
-| ADB | `adb: input keyevent KEYCODE_WAKEUP` |
+| ADB (built in; the TV asks once to allow this machine) | `adb: input keyevent KEYCODE_WAKEUP` |
 | Wake-on-LAN | `wol: true` (uses the `mac` setting) |
 | Android TV remote: key | `androidtv: { key: HOME }`. Names come from Android's `KEYCODE_*` list (`DPAD_UP`, `TV_INPUT_HDMI_{{input \| digits}}`), or use a number |
 | Android TV remote: power | `androidtv: { power: "on" }`. Presses POWER only if the TV reports the other state, and replies with what the TV reported |

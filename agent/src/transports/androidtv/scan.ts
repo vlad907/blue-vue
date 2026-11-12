@@ -25,7 +25,19 @@ export function localSubnets(): string[] {
   return [...out];
 }
 
-export async function scanAndroidTvs(subnets: string[] = localSubnets(), port = REMOTE_PORT): Promise<FoundTv[]> {
+/** How each kind of TV is found: the port it answers on, and where its name comes from. */
+export type ScanKind = "androidtv" | "roku" | "adb";
+const KINDS: Record<ScanKind, { port: number; info: (host: string) => Promise<Omit<FoundTv, "host">> }> = {
+  androidtv: { port: REMOTE_PORT, info: castInfo },
+  roku: { port: 8060, info: rokuInfo },
+  adb: { port: 5555, info: async () => ({}) },
+};
+
+export function scanTvs(kind: ScanKind, subnets?: string[]) {
+  return scanAndroidTvs(subnets, KINDS[kind].port, KINDS[kind].info);
+}
+
+export async function scanAndroidTvs(subnets: string[] = localSubnets(), port = REMOTE_PORT, info = castInfo): Promise<FoundTv[]> {
   for (const s of subnets) if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(s)) throw new Error(`"${s}" isn't a network like 192.168.1`);
   const hosts = subnets.flatMap((s) => Array.from({ length: 254 }, (_, i) => `${s}.${i + 1}`));
   const open: string[] = [];
@@ -37,7 +49,7 @@ export async function scanAndroidTvs(subnets: string[] = localSubnets(), port = 
     }
   };
   await Promise.all(Array.from({ length: 96 }, worker));
-  const found = await Promise.all(open.map(async (host) => ({ host, ...(await castInfo(host)) })));
+  const found = await Promise.all(open.map(async (host) => ({ host, ...(await info(host)) })));
   return found.sort((a, b) => ipNumber(a.host) - ipNumber(b.host));
 }
 
@@ -68,14 +80,31 @@ async function castInfo(host: string): Promise<Omit<FoundTv, "host">> {
   }
 }
 
+/** Roku's device-info page: name, model and the MAC of whichever network it's on. */
+async function rokuInfo(host: string): Promise<Omit<FoundTv, "host">> {
+  try {
+    const res = await fetch(`http://${host}:8060/query/device-info`, { signal: AbortSignal.timeout(1500) });
+    if (!res.ok) return {};
+    const xml = await res.text();
+    const tag = (t: string) => new RegExp(`<${t}>([^<]*)</${t}>`).exec(xml)?.[1] || undefined;
+    const model = [tag("vendor-name"), tag("model-name")].filter(Boolean).join(" ");
+    const mac = tag("network-type") === "ethernet" ? tag("ethernet-mac") : tag("wifi-mac");
+    return { name: tag("user-device-name") ?? tag("friendly-device-name"), model: model || undefined, mac: mac ?? tag("ethernet-mac") };
+  } catch {
+    return {};
+  }
+}
+
 const ipNumber = (ip: string) => ip.split(".").reduce((n, p) => n * 256 + Number(p), 0);
 
 /** Stand-in results for simulation mode: 20 TVs. */
-export function simulatedTvs(): FoundTv[] {
+export function simulatedTvs(kind: ScanKind = "androidtv"): FoundTv[] {
+  const model = { androidtv: "TCL 98QM7L", roku: "TCL Roku TV 75S455", adb: undefined }[kind];
+  const first = { androidtv: 145, roku: 170, adb: 200 }[kind];
   return Array.from({ length: 20 }, (_, i) => ({
-    host: `192.168.1.${145 + i}`,
-    name: `TCL 98QM7L ${i + 1}`,
-    model: "TCL 98QM7L",
+    host: `192.168.1.${first + i}`,
+    name: model && `${model} ${i + 1}`,
+    model,
     mac: `A0:B1:C2:00:00:${(i + 1).toString(16).padStart(2, "0").toUpperCase()}`,
   }));
 }

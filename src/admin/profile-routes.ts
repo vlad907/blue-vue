@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { learnOnce, sendirToPronto } from "../../agent/src/learn.ts";
 import { pairStep } from "../../agent/src/transports/androidtv/remote.ts";
-import { localSubnets, scanAndroidTvs, simulatedTvs } from "../../agent/src/transports/androidtv/scan.ts";
+import { localSubnets, scanTvs, simulatedTvs } from "../../agent/src/transports/androidtv/scan.ts";
 import { SimulatedConnection, describe } from "../../agent/src/transports/index.ts";
 import { resolveSettings } from "../engine/device-manager.ts";
 import { DeviceRuntime } from "../engine/device-runtime.ts";
@@ -126,16 +126,18 @@ export function registerProfileRoutes(admin: FastifyInstance, engine: Engine) {
    * Finds Android / Google TVs from the server or a wall PC. Each result says
    * which saved device already uses that address, so the admin can skip it.
    */
-  admin.post("/api/admin/discover/androidtv", async (req) => {
-    const { location, subnet } = z.object({ location: z.string().default("server"), subnet: z.string().optional() }).parse(req.body);
+  admin.post("/api/admin/discover/tvs", async (req) => {
+    const { location, subnet, kind } = z
+      .object({ location: z.string().default("server"), subnet: z.string().optional(), kind: z.enum(["androidtv", "roku", "adb"]).default("androidtv") })
+      .parse(req.body);
     // "192.168.1", "192.168.1.0/24" and "192.168.1.x" all mean the same /24.
     const subnets = subnet?.trim() ? subnet.split(/[\s,]+/).filter(Boolean).map((n) => n.split("/")[0].split(".").slice(0, 3).join(".")) : undefined;
     let found;
     try {
       found =
         location === "server"
-          ? engine.simulate ? simulatedTvs() : await scanAndroidTvs(subnets)
-          : await engine.agents.scanAndroidTvs(location, subnets);
+          ? engine.simulate ? simulatedTvs(kind) : await scanTvs(kind, subnets)
+          : await engine.agents.scanTvs(location, kind, subnets);
     } catch (err) {
       throw (err as { statusCode?: number }).statusCode ? err : fail(400, err instanceof Error ? err.message : String(err));
     }

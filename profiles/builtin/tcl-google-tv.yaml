@@ -6,8 +6,10 @@ category: display
 description: >
   Network control over ADB. On the TV, enable Developer options, then turn on
   Network debugging. Accept the "Allow debugging" prompt the first time the
-  system connects (tick Always allow). Install Android platform-tools on the
-  machine that reaches the TV, and set ADB_PATH if adb isn't on PATH.
+  system connects (tick Always allow). Blue Vue speaks ADB itself, so no
+  Android tools need installing.
+
+discover: adb
 
 transport:
   type: adb

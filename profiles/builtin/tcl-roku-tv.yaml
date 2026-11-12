@@ -1,13 +1,18 @@
 id: tcl-roku-tv
-name: TCL Roku TV
-manufacturer: TCL
-model: Roku TV models
+name: Roku TV
+manufacturer: Roku TV makers (TCL, Hisense, onn., Sharp, Philips, Westinghouse)
+model: Any Roku TV
 category: display
 description: >
-  Network control through Roku External Control Protocol. On the TV, turn on
-  Settings > System > Power > Fast TV start, and set Settings > System >
-  Advanced system settings > Control by mobile apps > Network access to
-  Permissive. Turn off Auto power off, and set Power on to Last used input.
+  Network control through Roku's External Control Protocol (port 8060), no
+  pairing needed. On each TV: Settings > System > Power > Fast TV start: On
+  (so it can be turned on over the network), and Settings > System >
+  Advanced system settings > Control by mobile apps > Network access:
+  Default or Permissive (with "Limited" or "Disabled" the TV answers 403 and
+  ignores commands). Also turn off Auto power off, and set Power on to Last
+  used input so a wall comes back on the right HDMI.
+
+discover: roku
 
 transport:
   type: http
@@ -31,14 +36,39 @@ commands:
     params:
       input: { type: enum, label: Input, values: [hdmi1, hdmi2, hdmi3, hdmi4], labels: { hdmi1: HDMI 1, hdmi2: HDMI 2, hdmi3: HDMI 3, hdmi4: HDMI 4 } }
     steps: [{ http: { method: POST, path: "/keypress/InputHDMI{{input | digits}}" } }]
+    sets: { input: "{{input}}" }
+  other_input:
+    label: Antenna or AV input
+    params:
+      input: { type: enum, label: Input, values: [InputTuner, InputAV1], labels: { InputTuner: Antenna TV, InputAV1: AV } }
+    steps: [{ http: { method: POST, path: "/keypress/{{input}}" } }]
+  home:
+    label: Home
+    steps: [{ http: { method: POST, path: /keypress/Home } }]
   key:
     label: Remote button
     params:
-      key: { type: enum, label: Button, values: [Home, Back, Select, Up, Down, Left, Right, Info, VolumeUp, VolumeDown, VolumeMute] }
+      key: { type: enum, label: Button, values: [Home, Back, Select, Up, Down, Left, Right, Play, Rev, Fwd, InstantReplay, Info, VolumeUp, VolumeDown, VolumeMute] }
     steps: [{ http: { method: POST, path: "/keypress/{{key}}" } }]
+  volume_up:
+    label: Volume up
+    steps: [{ http: { method: POST, path: /keypress/VolumeUp } }]
+  volume_down:
+    label: Volume down
+    steps: [{ http: { method: POST, path: /keypress/VolumeDown } }]
+  mute:
+    label: Mute
+    steps: [{ http: { method: POST, path: /keypress/VolumeMute } }]
+  launch:
+    label: Open a channel (app)
+    params:
+      app: { type: string, label: "Channel ID (from http://TV:8060/query/apps, e.g. 12 Netflix, 837 YouTube)" }
+    steps: [{ http: { method: POST, path: "/launch/{{app}}" } }]
 
 state:
   power: { type: enum, values: ["on", "off"], label: Power }
+  input: { type: string, label: Last input sent }
+  app: { type: string, label: On screen }
   model: { type: string, label: Model }
   network: { type: string, label: Network }
 
@@ -52,14 +82,28 @@ polls:
         set: { model: "{{value}}" }
       - xmlTag: network-type
         set: { network: "{{value}}" }
+  - every: 15
+    steps: [{ http: { method: GET, path: /query/active-app } }]
+    parse:
+      - xmlTag: app
+        set: { app: "{{value}}" }
 
 capabilities:
   power: { on: power_on, off: power_off, state: power }
-  source: { select: input, param: input }
+  source: { select: input, param: input, state: input }
 
 controls:
   - { type: toggle, label: Power, on: power_on, off: power_off, state: power }
   - { type: select, label: Input, command: input, param: input }
+  - { type: status, label: On screen, state: app }
+  - type: dpad
+    label: Remote
+    command: key
+    param: key
+    keys: { up: Up, down: Down, left: Left, right: Right, ok: Select, back: Back, guide: Info, exit: Home }
+  - { type: button, label: Vol −, command: volume_down }
+  - { type: button, label: Vol +, command: volume_up }
+  - { type: button, label: Mute, command: mute }
 
 simulator:
   state: { power: "off" }

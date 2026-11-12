@@ -8,6 +8,8 @@ import { join } from "node:path";
 import { identityStore, resetIdentity } from "../../agent/src/transports/androidtv/cert.ts";
 import { finishPairing, startPairing } from "../../agent/src/transports/androidtv/remote.ts";
 import { FakeTv } from "../../agent/test/fake-android-tv.ts";
+import { FakeFireTv } from "../../agent/test/fake-adb-device.ts";
+import { resetAdbKey } from "../../agent/src/transports/adb/client.ts";
 import { DeviceManager } from "../../src/engine/device-manager.ts";
 import { ProfileLibrary } from "../../src/engine/profiles.ts";
 import { EngineSceneRunner } from "../../src/engine/scenes.ts";
@@ -82,26 +84,29 @@ test("Atlas profile: subscribes per zone, sends JSON-RPC sets, applies pushed up
   }
 });
 
-test("TCL Roku profile: discrete keypresses, polled power and model", async () => {
+test("Roku TV profile: discrete keypresses, polled power, model and app on screen", async () => {
   const hits: string[] = [];
   let mode = "DisplayOff";
   const tv = createHttpServer((req, res) => {
     hits.push(`${req.method} ${req.url}`);
     if (req.url === "/keypress/PowerOn") mode = "PowerOn";
+    if (req.url === "/query/active-app") return res.end(`<active-app><app id="12" type="appl" version="5.0">Netflix</app></active-app>`);
     res.end(req.url === "/query/device-info" ? `<device-info><model-name>55S455</model-name><power-mode>${mode}</power-mode><network-type>ethernet</network-type></device-info>` : "");
   });
   await new Promise<void>((r) => tv.listen(0, "127.0.0.1", r));
   const { manager, state, cleanup } = setup();
   try {
     manager.apply(site({ devices: [{ id: "tv", name: "TV", profile: "tcl-roku-tv", settings: { host: "127.0.0.1", port: (tv.address() as { port: number }).port } }] }));
-    await until(() => state.state.devices.tv.state.model === "55S455");
+    await until(() => state.state.devices.tv.state.model === "55S455" && state.state.devices.tv.state.app === "Netflix");
     assert.equal(state.state.devices.tv.state.power, "off");
     assert.equal(state.state.devices.tv.online, true);
 
     await manager.capability("tv", "power", "on");
     await manager.execute("tv", "input", { input: "hdmi2" });
-    assert.deepEqual(hits.slice(1), ["POST /keypress/PowerOn", "POST /keypress/InputHDMI2"]);
+    await manager.execute("tv", "launch", { app: "837" });
+    assert.deepEqual(hits.filter((h) => h.startsWith("POST")), ["POST /keypress/PowerOn", "POST /keypress/InputHDMI2", "POST /launch/837"]);
     assert.equal(state.state.devices.tv.state.power, "on");
+    assert.equal(state.state.devices.tv.state.input, "hdmi2");
     await assert.rejects(manager.execute("tv", "input", { input: "vga" }), /must be one of/);
   } finally {
     cleanup();
@@ -209,6 +214,38 @@ test("TCL Google TV remote profile: pairs, reads power from the TV, presses POWE
     assert.deepEqual(tv.keys, [26, 243, 3]);
     assert.equal(state.state.devices.tv.state.input, "hdmi1");
     await manager.capability("tv", "power", "off");
+    assert.equal(state.state.devices.tv.state.power, "off");
+  } finally {
+    cleanup();
+    tv.stop();
+  }
+});
+
+test("Fire TV profile over built-in ADB: asks to be allowed once, discrete power, reads what's on screen", async () => {
+  identityStore.dir = mkdtempSync(join(tmpdir(), "bv-adb-"));
+  resetAdbKey();
+  const tv = await new FakeFireTv().start();
+  const { manager, state, cleanup } = setup();
+  try {
+    manager.apply(site({ devices: [{ id: "tv", name: "TV", profile: "fire-tv", settings: { host: "127.0.0.1", port: tv.port } }] }));
+    await until(() => state.state.devices.tv.state.model === "AFTKRT", 5000);
+    assert.equal(tv.prompts, 1);
+    assert.equal(state.state.devices.tv.state.power, "off");
+    assert.equal(state.state.devices.tv.state.app, "com.amazon.tv.launcher");
+    assert.equal(state.state.devices.tv.online, true);
+
+    await manager.capability("tv", "power", "on");
+    await manager.execute("tv", "input", { input: "hdmi3" });
+    await manager.execute("tv", "launch", { app: "com.netflix.ninja" });
+    assert.equal(tv.awake, true);
+    assert.deepEqual(tv.commands.filter((c) => !c.startsWith("dumpsys")), [
+      "input keyevent KEYCODE_WAKEUP",
+      "input keyevent KEYCODE_TV_INPUT_HDMI_3",
+      "monkey -p com.netflix.ninja -c android.intent.category.LAUNCHER 1",
+    ]);
+    assert.equal(state.state.devices.tv.state.input, "hdmi3");
+    await manager.capability("tv", "power", "off");
+    assert.equal(tv.awake, false);
     assert.equal(state.state.devices.tv.state.power, "off");
   } finally {
     cleanup();

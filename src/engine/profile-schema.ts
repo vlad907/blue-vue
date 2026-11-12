@@ -203,6 +203,8 @@ export const ProfileSchema = z.object({
   extends: z.string().optional(),
 
   transport: Transport,
+  // How "Add TVs" finds this kind of device on the network.
+  discover: z.enum(["androidtv", "roku", "adb"]).optional(),
   settings: z.array(SettingField).default([]),
   commands: z.record(Command),
   irCodes: z.record(z.string()).default({}), // Pronto hex by key name
