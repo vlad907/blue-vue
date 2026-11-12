@@ -1,12 +1,15 @@
 // A tiny, sandboxed template language for profiles:
 //   {{path}}                     value from the context (params, settings, state, item)
 //   {{path | filter:arg:arg}}    filters run left to right
+//   {{path | filter:@other.path}} an argument starting with @ is read from the context
 // There is deliberately no expression evaluation: profiles are written by
 // technicians in the admin UI, so only these fixed filters are available.
 
 export type Context = Record<string, unknown>;
 
-type Filter = (value: unknown, ...args: string[]) => unknown;
+// Arguments are strings as written, or any value when given as @path.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Filter = (value: unknown, ...args: any[]) => unknown;
 
 const num = (v: unknown) => {
   const n = typeof v === "number" ? v : Number(String(v).trim());
@@ -43,6 +46,17 @@ export const FILTERS: Record<string, Filter> = {
     return fallback ?? v;
   },
   json: (v) => JSON.stringify(v),
+  // patch:matchKey:matchValue:field:value — a copy of a list with one field of
+  // the matching item changed, for APIs that take a whole list back (e.g. the
+  // mosaic engine's sound outputs). Refuses rather than sending a list that's
+  // missing or doesn't contain the item, so nothing gets wiped by mistake.
+  patch: (v, key, match, field, value) => {
+    if (!Array.isArray(v)) throw new Error("patch: the list hasn't been read from the device yet");
+    if (!v.some((it) => it && typeof it === "object" && String((it as Record<string, unknown>)[key]) === String(match))) {
+      throw new Error(`patch: no item with ${key} "${match}"`);
+    }
+    return v.map((it) => (it && typeof it === "object" && String((it as Record<string, unknown>)[key]) === String(match) ? { ...it, [field]: value } : it));
+  },
 };
 
 export function isTruthy(v: unknown) {
@@ -71,9 +85,10 @@ function evaluate(expr: string, ctx: Context): unknown {
   const [path, ...filters] = splitPipes(expr);
   let value: unknown = /^-?\d+(\.\d+)?$/.test(path) ? Number(path) : /^"(.*)"$/.test(path) ? path.slice(1, -1) : lookup(ctx, path);
   for (const f of filters) {
-    const [name, ...args] = f.split(":");
+    const [name, ...raw] = f.split(":");
     const fn = FILTERS[name.trim()];
     if (!fn) throw new Error(`Unknown filter "${name.trim()}" (available: ${Object.keys(FILTERS).join(", ")})`);
+    const args = raw.map((a) => (a.trim().startsWith("@") ? lookup(ctx, a.trim().slice(1)) : a));
     value = fn(value, ...args);
   }
   return value;

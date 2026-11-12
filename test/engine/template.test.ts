@@ -42,3 +42,12 @@ test("parse rules: regex matches repeatedly, xmlTag and jsonPath extract values"
   assert.deepEqual(applyRules([{ jsonPath: "$.groups", set: { groupList: "{{value}}" } }], control).groupList, JSON.parse(control).groups);
   assert.deepEqual(applyRules([{ jsonPath: "$.x", set: { x: "{{value}}" } }], "not json"), {});
 });
+
+test("patch changes one field of one list item, reading arguments with @", () => {
+  const ctx = { state: { outs: [{ id: "bar", volumeDb: 0 }, { id: "patio", volumeDb: -10 }] }, output: "patio", level: -3, min: -5 };
+  assert.deepEqual(renderValue("{{state.outs | patch:id:@output:volumeDb:@level}}", ctx), [{ id: "bar", volumeDb: 0 }, { id: "patio", volumeDb: -3 }]);
+  assert.equal(ctx.state.outs[1].volumeDb, -10); // the original is left alone
+  assert.equal(render("{{level | clamp:@min:10}}", ctx), "-3");
+  assert.throws(() => render("{{state.outs | patch:id:lobby:mute:true}}", ctx), /no item with id "lobby"/);
+  assert.throws(() => render("{{state.missing | patch:id:bar:mute:true}}", ctx), /hasn't been read/);
+});

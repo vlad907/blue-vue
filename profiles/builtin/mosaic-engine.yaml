@@ -2,11 +2,15 @@ id: mosaic-engine
 name: Mosaic engine (video walls)
 category: video-wall
 description: >
-  The mosaic engine on the media server, which drives every video wall
-  ("group") and its receiving wall PCs. Groups, presets, scenes and NDI
-  streams are read live from the engine, so presets made in the mosaic
-  editor show up here by themselves. Port 8090 must be open on the media
-  server. If an API key is set in the editor (Settings > Access), enter it here.
+  The mosaic engine on the media server, which drives every video wall and
+  display ("group"), and its sound outputs. Groups, presets, scenes, NDI
+  streams and sound outputs are read live from the engine, so anything made
+  in the mosaic editor shows up here by itself. The media server runs one
+  canvas per area (Inside bar, Bar tower, ...): add one of these devices per
+  canvas, with its canvas id (canvas-1, canvas-2, ... listed at
+  http://media-server:8090/api/canvases; blank is the main one). Port 8090
+  must be open on the media server. If an API key is set in the editor
+  (Settings > Access), enter it here.
 
 transport:
   type: http
@@ -16,6 +20,7 @@ transport:
 settings:
   - { key: host, label: Media server IP address, type: string, required: true }
   - { key: port, label: Port, type: integer, default: 8090 }
+  - { key: canvas, label: Canvas, type: string, help: "canvas-1, canvas-2, ... (see http://media-server:8090/api/canvases). Blank: the main canvas" }
   - { key: apiKey, label: API key, type: string, help: "Only if one is set in the mosaic editor" }
 
 commands:
@@ -28,7 +33,7 @@ commands:
     steps:
       - http:
           method: POST
-          path: "/api/walls/{{group}}/presets/{{preset}}/recall"
+          path: "/api/walls/{{group}}/presets/{{preset}}/recall?canvas={{settings.canvas}}"
           body: '{"transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
     sets: { "groups.{{group}}.activePreset": "{{preset}}" }
@@ -42,7 +47,7 @@ commands:
     steps:
       - http:
           method: POST
-          path: "/api/walls/{{group}}/show"
+          path: "/api/walls/{{group}}/show?canvas={{settings.canvas}}"
           body: '{"ndiName": {{ndiName | json}}, "transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
     sets: { "groups.{{group}}.activePreset": "", "groups.{{group}}.stream": "{{ndiName}}" }
@@ -55,10 +60,73 @@ commands:
     steps:
       - http:
           method: POST
-          path: "/api/walls/{{group}}/clear"
+          path: "/api/walls/{{group}}/clear?canvas={{settings.canvas}}"
           body: '{"transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
     sets: { "groups.{{group}}.activePreset": "", "groups.{{group}}.stream": "" }
+
+  restart_videos:
+    label: Restart a wall's videos together
+    params:
+      group: { type: string, label: Wall, optionsFrom: state.groupList }
+    steps:
+      - http:
+          method: POST
+          path: "/api/walls/{{group}}/restart?canvas={{settings.canvas}}"
+          body: "{}"
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+
+  # Sound outputs. The engine takes the whole list back, so each change reads
+  # the list fresh, changes one value of one output, and sends it all.
+  read_audio:
+    label: Read sound outputs
+    hidden: true
+    steps: [{ http: { method: GET, path: "/api/layout?canvas={{settings.canvas}}" } }]
+    parse:
+      - jsonPath: $.audioOutputs
+        set: { audioOutputs: "{{value}}" }
+
+  audio_volume:
+    label: Sound output volume
+    params:
+      output: { type: string, label: Sound output, optionsFrom: state.audioOutputs }
+      volumeDb: { type: number, label: Volume (dB), min: -60, max: 12, step: 1, default: 0 }
+    steps:
+      - { command: read_audio }
+      - http:
+          method: PUT
+          path: "/api/layout?canvas={{settings.canvas}}"
+          body: '{"audioOutputs": {{state.audioOutputs | patch:id:@output:volumeDb:@volumeDb | json}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+    sets: { "audio.{{output}}.volumeDb": "{{volumeDb}}" }
+
+  audio_mute:
+    label: Sound output mute
+    params:
+      output: { type: string, label: Sound output, optionsFrom: state.audioOutputs }
+      mute: { type: boolean, label: Muted, default: true }
+    steps:
+      - { command: read_audio }
+      - http:
+          method: PUT
+          path: "/api/layout?canvas={{settings.canvas}}"
+          body: '{"audioOutputs": {{state.audioOutputs | patch:id:@output:mute:@mute | json}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+    sets: { "audio.{{output}}.mute": "{{mute}}" }
+
+  audio_source:
+    label: Sound output source
+    params:
+      output: { type: string, label: Sound output, optionsFrom: state.audioOutputs }
+      source: { type: string, label: "Plays (NDI stream, or input:<device> for a sound input)", optionsFrom: state.streams }
+    steps:
+      - { command: read_audio }
+      - http:
+          method: PUT
+          path: "/api/layout?canvas={{settings.canvas}}"
+          body: '{"audioOutputs": {{state.audioOutputs | patch:id:@output:source:@source | json}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+    sets: { "audio.{{output}}.source": "{{source}}" }
 
   recall_scene:
     label: Recall scene (all walls)
@@ -68,7 +136,7 @@ commands:
     steps:
       - http:
           method: POST
-          path: "/api/scenes/{{scene}}/recall"
+          path: "/api/scenes/{{scene}}/recall?canvas={{settings.canvas}}"
           body: '{"transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
 
@@ -80,7 +148,7 @@ commands:
     steps:
       - http:
           method: POST
-          path: "/api/layouts/{{layout}}/activate"
+          path: "/api/layouts/{{layout}}/activate?canvas={{settings.canvas}}"
           body: '{"transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
 
@@ -89,12 +157,16 @@ state:
   "groups.*.activePreset": { type: string, label: Preset on }
   "groups.*.name": { type: string, label: Wall name }
   "endpoints.*.online": { type: boolean, label: Wall PC online }
+  "audio.*.volumeDb": { type: number, label: Volume (dB) }
+  "audio.*.mute": { type: boolean, label: Muted }
+  "audio.*.source": { type: string, label: Plays }
+  "audio.*.problem": { type: string, label: Sound problem }
 
 # One request describes everything; read it every few seconds. Lists are kept
 # whole (for the panel's buttons) and per group (for "which preset is on").
 polls:
   - every: 3
-    steps: [{ http: { method: GET, path: /api/control } }]
+    steps: [{ http: { method: GET, path: "/api/control?canvas={{settings.canvas}}" } }]
     parse:
       - jsonPath: $.groups
         set: { groupList: "{{value}}" }
@@ -104,6 +176,7 @@ polls:
           "groups.{{value.id}}.activePreset": "{{value.activePreset}}"
           "groups.{{value.id}}.presets": "{{value.presets}}"
           "groups.{{value.id}}.noSignal": "{{value.noSignal}}"
+          "groups.{{value.id}}.showing": "{{value.showing}}"
       - jsonPath: $.scenes
         set: { sceneList: "{{value}}" }
       - jsonPath: $.layouts
@@ -120,6 +193,23 @@ polls:
           "endpoints.{{value.id}}.displaysOk": "{{value.displaysOk}}"
           "endpoints.{{value.id}}.displays": "{{value.displays}}"
 
+  # Sound outputs: their settings from the layout, their health from /api/audio.
+  - every: 5
+    steps: [{ http: { method: GET, path: "/api/layout?canvas={{settings.canvas}}" } }]
+    parse:
+      - jsonPath: $.audioOutputs
+        set: { audioOutputs: "{{value}}" }
+      - jsonPath: "$.audioOutputs[*]"
+        set:
+          "audio.{{value.id}}.volumeDb": "{{value.volumeDb}}"
+          "audio.{{value.id}}.mute": "{{value.mute}}"
+          "audio.{{value.id}}.source": "{{value.source}}"
+  - every: 5
+    steps: [{ http: { method: GET, path: "/api/audio?canvas={{settings.canvas}}" } }]
+    parse:
+      - jsonPath: "$.outputs[*]"
+        set: { "audio.{{value.id}}.problem": "{{value.error | default:@value.sourceError}}" }
+
 capabilities:
   layoutPresets: { recall: recall_preset, param: preset, optionsFrom: state.groupList }
 
@@ -130,8 +220,19 @@ controls:
     controls:
       - { type: presets, label: Presets, command: recall_preset, param: preset, params: { group: "{{item.id}}" }, options: item.presets, state: "groups.{{item.id}}.activePreset" }
       - { type: select, label: Show one stream, command: show_stream, param: ndiName, params: { group: "{{item.id}}" }, options: state.streams, state: "groups.{{item.id}}.stream" }
+      - { type: status, label: On screen, state: "groups.{{item.id}}.showing" }
+      - { type: status, label: No signal from, state: "groups.{{item.id}}.noSignal" }
       - { type: button, label: Blank this wall, command: clear, params: { group: "{{item.id}}" } }
+      - { type: button, label: Restart videos, command: restart_videos, params: { group: "{{item.id}}" } }
   - { type: presets, label: Scenes (all walls), command: recall_scene, param: scene, options: state.sceneList }
+  - type: group
+    repeat: state.audioOutputs
+    label: "{{item.name}} (sound)"
+    controls:
+      - { type: slider, label: Volume (dB), command: audio_volume, param: volumeDb, params: { output: "{{item.id}}" }, state: "audio.{{item.id}}.volumeDb" }
+      - { type: toggle, label: Muted, command: audio_mute, param: mute, params: { output: "{{item.id}}" }, state: "audio.{{item.id}}.mute" }
+      - { type: select, label: Plays, command: audio_source, param: source, params: { output: "{{item.id}}" }, options: state.streams, state: "audio.{{item.id}}.source" }
+      - { type: status, label: Problem, state: "audio.{{item.id}}.problem" }
 
 # Example content so the panel has something to show in simulation mode.
 simulator:
@@ -153,3 +254,12 @@ simulator:
     sceneList: [{ id: opening, name: Opening }]
     layoutList: [{ id: venue, name: Venue, active: true }]
     streams: ["ZOWIEBOXPRO-54447 (ZowieBox-54447)", "GFX-PC (Slides)"]
+    audioOutputs:
+      - { id: bar, name: Bar speakers, source: "ZOWIEBOXPRO-54447 (ZowieBox-54447)", device: "", channelPair: 0, volumeDb: -6, mute: false, matchWall: true, delayMs: 0, enabled: true }
+      - { id: patio, name: Patio, source: "GFX-PC (Slides)", device: "", channelPair: 1, volumeDb: -12, mute: true, matchWall: true, delayMs: 0, enabled: true }
+    "audio.bar.volumeDb": -6
+    "audio.bar.mute": false
+    "audio.bar.source": "ZOWIEBOXPRO-54447 (ZowieBox-54447)"
+    "audio.patio.volumeDb": -12
+    "audio.patio.mute": true
+    "audio.patio.source": "GFX-PC (Slides)"

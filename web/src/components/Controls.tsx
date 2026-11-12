@@ -58,13 +58,19 @@ function ControlView({ device, profile, control: c, item }: { device: UiDevice; 
       );
     }
 
-    case "status":
+    case "status": {
+      // Lists (e.g. what a wall shows) read as names; an empty one hides a "problem" row.
+      const text = Array.isArray(value)
+        ? value.map((v) => (v && typeof v === "object" ? String((v as Record<string, unknown>).name ?? (v as Record<string, unknown>).id ?? "") : String(v))).filter(Boolean).join(", ")
+        : value === undefined || value === null ? "" : typeof value === "object" ? JSON.stringify(value) : channelLabel(ui.channels, value);
+      if (!text && Array.isArray(value)) return null;
       return (
         <div className="status-row">
           <span className="muted">{label}</span>
-          <b>{value === undefined || value === "" ? "—" : channelLabel(ui.channels, value)}</b>
+          <b>{text || "—"}</b>
         </div>
       );
+    }
 
     case "button":
       return (

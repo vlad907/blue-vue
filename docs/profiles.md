@@ -111,6 +111,11 @@ Optional parts of a command:
 | `bool:1:0` | turn true/false into text |
 | `hex:2`, `pad:3` | hex with zero padding, or pad with zeros |
 | `upper`, `lower`, `digits`, `default:x`, `json` | |
+| `patch:id:@output:volumeDb:@volumeDb` | a copy of a list with one field of the matching item changed, for APIs that take a whole list back. Refuses if the list hasn't been read or has no such item |
+
+An argument starting with `@` is read from the context instead of written literally: `clamp:@settings.min:100`, `default:@value.sourceError`.
+
+**Read, change one value, send it all back.** Some devices only accept a whole list (the mosaic engine's sound outputs). Make a hidden command that reads the list into state with `parse`, then call it as the first step and send the patched list in the second, as `audio_volume` in `mosaic-engine.yaml` does. The read happens right before the write, so changes made elsewhere in the meantime are kept.
 
 ## Reading state
 - `regex` uses named groups (`(?<zone>\d+)`), or `value` for the first group, and runs for every match in a message.

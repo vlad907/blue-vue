@@ -319,32 +319,49 @@ test("built-in PJLink profile: queries power and input, reads replies", async ()
 });
 
 test("mosaic engine profile: reads walls and presets live, recalls with the API key, follows the engine", async () => {
-  // A fake mosaic engine following CONTROL_API.md.
-  const requests: { method: string; url: string; key?: string; type?: string; body: string }[] = [];
-  const engineState = {
+  // A fake mosaic engine following CONTROL_API.md: two canvases, each with its own walls and sound outputs.
+  const requests: { method: string; path: string; canvas: string; key?: string; type?: string; body: string }[] = [];
+  const canvasState = (wall: string) => ({
     groups: [
-      { id: "main-wall", name: "Main wall", displays: 16, activePreset: "camera-1-full", presets: [{ id: "camera-1-full", name: "Camera 1 full" }, { id: "camera-slides", name: "Camera + slides" }], showing: [], noSignal: [] },
-      { id: "double-wide", name: "Double wide", displays: 1, activePreset: "", presets: [], showing: [], noSignal: [] },
+      { id: wall, name: "Main wall", displays: 16, activePreset: "camera-1-full", presets: [{ id: "camera-1-full", name: "Camera 1 full" }, { id: "camera-slides", name: "Camera + slides" }], showing: [{ name: "Camera 1", type: "ndi", ndiName: "CAM (1)", signal: "ok" }], noSignal: [] as string[] },
+      { id: "double-wide", name: "Double wide", displays: 1, activePreset: "", presets: [] as { id: string; name: string }[], showing: [], noSignal: ["GFX-PC (Slides)"] },
     ],
     endpoints: [{ id: "wall-pc-1", name: "Wall PC 1", online: true, displays: 4, displaysOk: 4 }],
     scenes: [{ id: "opening", name: "Opening" }],
     layouts: [{ id: "venue", name: "Venue", active: true }],
-    layout: { id: "venue", name: "Venue" },
+    layout: { id: "venue", name: wall === "main-wall" ? "Venue" : "Bar tower" },
     ndi: { available: true, streams: ["ZOWIEBOXPRO-54447 (ZowieBox-54447)", "GFX-PC (Slides)"] },
-  };
+    audioOutputs: [
+      { id: "bar", name: "Bar speakers", source: "GFX-PC (Slides)", device: "", channelPair: 0, volumeDb: 0, mute: false, matchWall: true, delayMs: 0, enabled: true },
+      { id: "patio", name: "Patio", source: "", device: "", channelPair: 1, volumeDb: -10, mute: false, matchWall: true, delayMs: 0, enabled: true },
+    ],
+  });
+  const canvases: Record<string, ReturnType<typeof canvasState>> = { "canvas-1": canvasState("main-wall"), "canvas-2": canvasState("tower") };
   const engine = createHttpServer((req, res) => {
     let body = "";
     req.on("data", (d) => (body += d));
     req.on("end", () => {
-      requests.push({ method: req.method!, url: req.url!, key: req.headers["x-api-key"] as string, type: req.headers["content-type"], body });
+      const url = new URL(req.url!, "http://x");
+      const canvasId = req.headers["x-mosaic-canvas"] ?? url.searchParams.get("canvas") ?? "";
+      requests.push({ method: req.method!, path: url.pathname, canvas: String(canvasId), key: req.headers["x-api-key"] as string, type: req.headers["content-type"], body });
       const send = (status: number, data: unknown) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(data)); };
-      if (req.method === "GET" && req.url === "/api/control") return send(200, engineState);
-      if (req.method === "POST") {
+      const c = canvases[String(canvasId || "canvas-1")];
+      if (!c) return send(req.method === "GET" ? 500 : 409, { error: `canvas '${canvasId}' isn't running any more` });
+      const { audioOutputs, ...control } = c;
+      if (req.method === "GET" && url.pathname === "/api/control") return send(200, control);
+      if (req.method === "GET" && url.pathname === "/api/layout") return send(200, { id: "venue", outputs: [], audioOutputs });
+      if (req.method === "GET" && url.pathname === "/api/audio") return send(200, { outputs: audioOutputs.map((o) => ({ id: o.id, levelDb: [-20, -20], error: "", sourceError: o.source ? "" : "no such stream" })) });
+      if (req.method !== "GET") {
         if (!body && req.headers["content-length"] !== "0") return send(400, { error: "body or Content-Length: 0 required" });
         if (req.headers["x-api-key"] !== "secret") return send(401, { error: "API key required" });
-        const m = /^\/api\/walls\/([^/]+)\/(presets\/([^/]+)\/recall|show|clear)$/.exec(req.url!);
-        const group = m && engineState.groups.find((g) => g.id === m[1]);
+        if (req.method === "PUT" && url.pathname === "/api/layout") {
+          c.audioOutputs = JSON.parse(body).audioOutputs; // the whole list replaces the old one
+          return send(200, {});
+        }
+        const m = /^\/api\/walls\/([^/]+)\/(presets\/([^/]+)\/recall|show|clear|restart)$/.exec(url.pathname);
+        const group = m && c.groups.find((g) => g.id === m[1]);
         if (!group) return send(404, { error: "no such wall group" });
+        if (m[2] === "restart") return send(200, { group: group.id, restarted: [`${group.id}--video`] });
         if (m[3]) {
           if (!group.presets.some((p) => p.id === m[3])) return send(404, { error: `no such preset in group '${group.id}'` });
           group.activePreset = m[3];
@@ -360,32 +377,74 @@ test("mosaic engine profile: reads walls and presets live, recalls with the API 
   const { manager, state, cleanup } = setup();
   try {
     const port = (engine.address() as { port: number }).port;
-    manager.apply(site({ devices: [{ id: "mosaic", name: "Mosaic", profile: "mosaic-engine", settings: { host: "127.0.0.1", port, apiKey: "secret" } }] }));
+    manager.apply(site({ devices: [
+      { id: "mosaic", name: "Mosaic", profile: "mosaic-engine", settings: { host: "127.0.0.1", port, apiKey: "secret" } },
+      { id: "tower", name: "Bar tower", profile: "mosaic-engine", settings: { host: "127.0.0.1", port, apiKey: "secret", canvas: "canvas-2" } },
+    ] }));
     const st = () => state.state.devices.mosaic.state;
+    const tw = () => state.state.devices.tower.state;
 
-    // Everything comes from GET /api/control.
-    await until(() => Array.isArray(st().groupList));
+    // Everything comes from GET /api/control, per canvas.
+    await until(() => Array.isArray(st().groupList) && Array.isArray(tw().groupList) && Array.isArray(st().audioOutputs) && st()["audio.patio.problem"] !== undefined);
     assert.deepEqual((st().groupList as { id: string }[]).map((g) => g.id), ["main-wall", "double-wide"]);
+    assert.deepEqual((tw().groupList as { id: string }[]).map((g) => g.id), ["tower", "double-wide"]);
+    assert.equal(tw().layout, "Bar tower");
     assert.equal(st()["groups.main-wall.activePreset"], "camera-1-full");
     assert.deepEqual((st()["groups.main-wall.presets"] as { id: string }[]).map((p) => p.id), ["camera-1-full", "camera-slides"]);
-    assert.deepEqual(st().streams, engineState.ndi.streams);
+    assert.deepEqual((st()["groups.main-wall.showing"] as { name: string }[]).map((x) => x.name), ["Camera 1"]);
+    assert.deepEqual(st()["groups.double-wide.noSignal"], ["GFX-PC (Slides)"]);
+    assert.deepEqual(st().streams, canvases["canvas-1"].ndi.streams);
     assert.equal(st()["endpoints.wall-pc-1.online"], true);
     assert.equal(st().layout, "Venue");
+    assert.equal(st()["audio.patio.volumeDb"], -10);
+    assert.equal(st()["audio.patio.problem"], "no such stream");
+    assert.equal(st()["audio.bar.problem"], "");
 
     await manager.execute("mosaic", "recall_preset", { group: "main-wall", preset: "camera-slides", transitionMs: 800 });
-    const recall = requests.find((r) => r.url === "/api/walls/main-wall/presets/camera-slides/recall")!;
-    assert.deepEqual({ key: recall.key, type: recall.type, body: JSON.parse(recall.body) }, { key: "secret", type: "application/json", body: { transitionMs: 800 } });
+    const recall = requests.find((r) => r.path === "/api/walls/main-wall/presets/camera-slides/recall")!;
+    assert.deepEqual({ canvas: recall.canvas, key: recall.key, type: recall.type, body: JSON.parse(recall.body) }, { canvas: "", key: "secret", type: "application/json", body: { transitionMs: 800 } });
     assert.equal(st()["groups.main-wall.activePreset"], "camera-slides");
+
+    // The second device controls only its own canvas.
+    await manager.execute("tower", "recall_preset", { group: "tower", preset: "camera-slides" });
+    assert.equal(canvases["canvas-2"].groups[0].activePreset, "camera-slides");
+    assert.equal(requests.find((r) => r.path === "/api/walls/tower/presets/camera-slides/recall")!.canvas, "canvas-2");
+    await manager.execute("tower", "restart_videos", { group: "tower" });
+    assert.equal(requests.find((r) => r.path === "/api/walls/tower/restart")!.canvas, "canvas-2");
 
     // Stream names with spaces and parentheses are sent as proper JSON.
     await manager.execute("mosaic", "show_stream", { group: "double-wide", ndiName: 'GFX-PC (Slides) "B"' });
-    assert.deepEqual(JSON.parse(requests.find((r) => r.url === "/api/walls/double-wide/show")!.body), { ndiName: 'GFX-PC (Slides) "B"', transitionMs: 500 });
+    assert.deepEqual(JSON.parse(requests.find((r) => r.path === "/api/walls/double-wide/show")!.body), { ndiName: 'GFX-PC (Slides) "B"', transitionMs: 500 });
 
     await assert.rejects(manager.execute("mosaic", "recall_preset", { group: "main-wall", preset: "nope" }), /HTTP 404/);
 
+    // Sound: one value of one output changes; the rest of the list goes back as it was, including
+    // a change someone made in the editor a moment ago.
+    canvases["canvas-1"].audioOutputs[1].delayMs = 40;
+    await manager.execute("mosaic", "audio_volume", { output: "bar", volumeDb: -12 });
+    await manager.execute("mosaic", "audio_mute", { output: "patio", mute: true });
+    await manager.execute("mosaic", "audio_source", { output: "patio", source: "ZOWIEBOXPRO-54447 (ZowieBox-54447)" });
+    const outs = canvases["canvas-1"].audioOutputs;
+    assert.deepEqual(outs.map((o) => [o.id, o.volumeDb, o.mute, o.source, o.delayMs]), [
+      ["bar", -12, false, "GFX-PC (Slides)", 0],
+      ["patio", -10, true, "ZOWIEBOXPRO-54447 (ZowieBox-54447)", 40],
+    ]);
+    assert.equal(st()["audio.bar.volumeDb"], -12);
+    assert.equal(canvases["canvas-2"].audioOutputs[0].volumeDb, 0);
+    // An output that isn't there is refused before anything is sent, so no list gets wiped.
+    const puts = requests.filter((r) => r.method === "PUT").length;
+    await assert.rejects(manager.execute("mosaic", "audio_mute", { output: "lobby", mute: true }), /no item with id "lobby"/);
+    assert.equal(requests.filter((r) => r.method === "PUT").length, puts);
+    assert.equal(canvases["canvas-1"].audioOutputs.length, 2);
+
     // A change made in the mosaic editor shows up on the next poll.
-    engineState.groups[0].activePreset = "camera-1-full";
+    canvases["canvas-1"].groups[0].activePreset = "camera-1-full";
     await until(() => st()["groups.main-wall.activePreset"] === "camera-1-full", 5000);
+
+    // A stopped canvas is refused (409), not applied to another wall.
+    delete canvases["canvas-2"];
+    await assert.rejects(manager.execute("tower", "clear", { group: "tower" }), /HTTP 409/);
+    assert.equal(canvases["canvas-1"].groups[0].activePreset, "camera-1-full");
   } finally {
     cleanup();
     engine.close();
