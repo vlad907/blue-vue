@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { adminApi, slugify, type LogEntry, type SiteDevice } from "./adminApi.ts";
+import { adminApi, slugify, type LogEntry, type Site, type SiteDevice } from "./adminApi.ts";
 import { useDraft } from "./draft.tsx";
 import { Check, Field, ParamsForm, Pick, SettingsForm, Text, defaultSettings } from "./forms.tsx";
 import { useLive } from "./live.tsx";
@@ -10,12 +10,51 @@ const CATEGORY_LABELS: Record<string, string> = {
   projector: "Projectors", lighting: "Lighting", other: "Other",
 };
 
+/** Takes devices out of the site, and out of the walls and scenes that use them, so the site stays valid. */
+export function removeDevices(s: Site, ids: string[]): Site {
+  const gone = new Set(ids);
+  s.devices = s.devices.filter((x) => !gone.has(x.id));
+  s.groups = s.groups.map((g) => ({ ...g, devices: g.devices.filter((x) => !gone.has(x)) }));
+  s.scenes = s.scenes.map((sc) => ({ ...sc, steps: sc.steps.filter((st) => !("device" in st) || !st.device || !gone.has(st.device)) }));
+  return s;
+}
+
 export function Devices() {
   const { site, update, profiles, dirty } = useDraft();
   const state = useLive();
   const [editing, setEditing] = useState<string | null>(null); // device id, or "" for a new one
   const [addingTvs, setAddingTvs] = useState(false);
   const [testing, setTesting] = useState<string>();
+  // Ticked rows, for removing or placing many devices at once.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [typeChoice, setTypeFilter] = useState<string>();
+  const [search, setSearch] = useState("");
+
+  const usedTypes = [...new Set(site.devices.map((d) => d.profile))].map((id) => ({ value: id, label: profiles[id]?.name ?? id })).sort((a, b) => a.label.localeCompare(b.label));
+  const typeFilter = usedTypes.some((t) => t.value === typeChoice) ? typeChoice : undefined; // back to all once its last device is gone
+  const words = search.trim().toLowerCase();
+  const shown = site.devices.filter(
+    (d) => (!typeFilter || d.profile === typeFilter) && (!words || `${d.name} ${d.id} ${d.settings.host ?? ""}`.toLowerCase().includes(words)),
+  );
+  const chosen = site.devices.filter((d) => picked.has(d.id)); // ignores ids removed since
+  const allShown = shown.length > 0 && shown.every((d) => picked.has(d.id));
+  const toggle = (ids: string[], on: boolean) => {
+    const next = new Set(picked);
+    for (const id of ids) on ? next.add(id) : next.delete(id);
+    setPicked(next);
+  };
+  const walls = site.groups.filter((g) => g.kind === "wall");
+  const removeChosen = () => {
+    const ids = chosen.map((d) => d.id);
+    const inWalls = site.groups.filter((g) => g.devices.some((x) => picked.has(x))).length;
+    const inScenes = site.scenes.filter((sc) => sc.steps.some((st) => "device" in st && !!st.device && picked.has(st.device))).length;
+    const names = chosen.slice(0, 5).map((d) => d.name).join(", ") + (chosen.length > 5 ? ` and ${chosen.length - 5} more` : "");
+    const also = inWalls || inScenes ? ` They're also taken out of ${[inWalls && `${inWalls} wall${inWalls > 1 ? "s" : ""}`, inScenes && `${inScenes} scene${inScenes > 1 ? "s" : ""}`].filter(Boolean).join(" and ")}.` : "";
+    if (!confirm(`Remove ${ids.length} device${ids.length > 1 ? "s" : ""} (${names})?${also}`)) return;
+    update((s) => removeDevices(s, ids));
+    if (testing && picked.has(testing)) setTesting(undefined);
+    setPicked(new Set());
+  };
 
   const agentName = (id: string) => (id === "server" ? "Control server" : site.agents.find((a) => a.id === id)?.name ?? id);
   const roomName = (id?: string) => site.rooms.find((r) => r.id === id)?.name ?? "";
@@ -30,17 +69,41 @@ export function Devices() {
             <button className="btn primary" onClick={() => { setAddingTvs(false); setEditing(""); }}>+ Add device</button>
           </span>
         </div>
+        <div className="row-tight">
+          <Text value={search} onChange={setSearch} placeholder="Search name or address" />
+          <Pick value={typeFilter} empty="All types" options={usedTypes} onChange={(t) => setTypeFilter(t || undefined)} />
+        </div>
+        {chosen.length > 0 && (
+          <div className="row-tight bulkbar">
+            <b>{chosen.length} selected</b>
+            <select value="" onChange={(e) => { const room = e.target.value === "__none__" ? undefined : e.target.value; update((s) => { for (const d of s.devices) if (picked.has(d.id)) d.room = room; return s; }); }}>
+              <option value="" disabled>Move to room…</option>
+              <option value="__none__">No room</option>
+              {site.rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+            {walls.length > 0 && (
+              <select value="" onChange={(e) => { const wall = e.target.value; update((s) => { const g = s.groups.find((x) => x.id === wall); if (g) g.devices.push(...chosen.map((d) => d.id).filter((id) => !g.devices.includes(id))); return s; }); }}>
+                <option value="" disabled>Add to wall…</option>
+                {walls.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+            )}
+            <span className="grow" />
+            <button className="btn small" onClick={() => setPicked(new Set())}>Clear</button>
+            <button className="btn small danger" onClick={removeChosen}>Remove {chosen.length}</button>
+          </div>
+        )}
         <table className="atable">
           <thead>
-            <tr><th>Name</th><th>Type</th><th>Reached from</th><th>Room</th><th>Status</th><th /></tr>
+            <tr><th><input type="checkbox" title="Select all shown" checked={allShown} onChange={(e) => toggle(shown.map((d) => d.id), e.target.checked)} /></th><th>Name</th><th>Type</th><th>Reached from</th><th>Room</th><th>Status</th><th /></tr>
           </thead>
           <tbody>
-            {site.devices.map((d) => {
+            {shown.map((d) => {
               const live = state?.devices[d.id];
               const status = !live ? "not saved yet" : live.problem ? live.problem : live.online ? "online" : (live.error ?? "offline");
               const cls = !live ? "" : live.problem ? "bad" : live.online ? "ok" : "warn";
               return (
                 <tr key={d.id} className={testing === d.id ? "selected" : ""}>
+                  <td><input type="checkbox" checked={picked.has(d.id)} onChange={(e) => toggle([d.id], e.target.checked)} /></td>
                   <td><b>{d.name}</b><div className="muted">{d.id}</div></td>
                   <td>{profiles[d.profile]?.name ?? <span className="bad-text">{d.profile} (missing)</span>}</td>
                   <td>{agentName(d.location)}</td>
@@ -56,6 +119,7 @@ export function Devices() {
           </tbody>
         </table>
         {!site.devices.length && <p className="empty">No devices yet.</p>}
+        {site.devices.length > 0 && !shown.length && <p className="empty">No devices match.</p>}
       </div>
 
       {addingTvs && editing === null && <AddTvs onClose={() => setAddingTvs(false)} />}
@@ -71,15 +135,7 @@ export function Devices() {
               return s;
             })
           }
-          onDelete={(id) =>
-            update((s) => {
-              s.devices = s.devices.filter((x) => x.id !== id);
-              // Drop references so the site stays valid.
-              s.groups = s.groups.map((g) => ({ ...g, devices: g.devices.filter((x) => x !== id) }));
-              s.scenes = s.scenes.map((sc) => ({ ...sc, steps: sc.steps.filter((st) => !("device" in st) || st.device !== id) }));
-              return s;
-            })
-          }
+          onDelete={(id) => update((s) => removeDevices(s, [id]))}
         />
       )}
       {testing && editing === null && !addingTvs && <DeviceConsole id={testing} unsaved={dirty} onClose={() => setTesting(undefined)} />}

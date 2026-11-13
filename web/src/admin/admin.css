@@ -129,3 +129,5 @@ input.invalid { outline: 2px solid var(--bad); }
 .atable td b { white-space: nowrap; }
 .nic-list { margin: 4px 0 4px 26px; display: flex; flex-direction: column; gap: 4px; }
 .nic-list .acheck { gap: 8px; }
+.bulkbar { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(59,130,246,.08); }
+.bulkbar select { width: auto; }
