@@ -53,6 +53,8 @@ export const SiteSchema = z.object({
       columns: z.number().int().min(1).max(16).optional(),
       // The mosaic engine wall that plays content on these panels.
       mosaic: z.object({ device: z.string(), group: z.string().min(1) }).optional(),
+      // The input every TV in this wall switches to when turned on, e.g. "hdmi1". A TV's own setting wins.
+      powerOnInput: z.string().optional(),
     }))
     .default([]),
   scenes: z.array(z.object({ id: Id, name: z.string(), description: z.string().optional(), steps: z.array(SceneStep) })).default([]),

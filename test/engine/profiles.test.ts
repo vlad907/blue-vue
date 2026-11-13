@@ -10,7 +10,7 @@ import { finishPairing, startPairing } from "../../agent/src/transports/androidt
 import { FakeTv } from "../../agent/test/fake-android-tv.ts";
 import { FakeFireTv } from "../../agent/test/fake-adb-device.ts";
 import { resetAdbKey } from "../../agent/src/transports/adb/client.ts";
-import { DeviceManager } from "../../src/engine/device-manager.ts";
+import { DeviceManager, type PowerOnTiming } from "../../src/engine/device-manager.ts";
 import { ProfileLibrary } from "../../src/engine/profiles.ts";
 import { EngineSceneRunner } from "../../src/engine/scenes.ts";
 import { SiteSchema, checkSite, type Site } from "../../src/engine/site.ts";
@@ -28,12 +28,12 @@ async function until(cond: () => boolean, ms = 2000) {
   }
 }
 
-function setup(customProfiles: Record<string, unknown>[] = [], simulate = false) {
+function setup(customProfiles: Record<string, unknown>[] = [], simulate = false, timing?: Partial<PowerOnTiming>) {
   const custom = mkdtempSync(join(tmpdir(), "bv-profiles-"));
   const lib = new ProfileLibrary(BUILTIN, custom).load();
   for (const p of customProfiles) assert.deepEqual(lib.saveCustom(p), []);
   const state = new StateStore();
-  const manager = new DeviceManager(lib, state, { simulate });
+  const manager = new DeviceManager(lib, state, { simulate, timing });
   return { lib, state, manager, cleanup: () => { manager.stopAll(); rmSync(custom, { recursive: true, force: true }); } };
 }
 
@@ -247,6 +247,39 @@ test("Fire TV profile over built-in ADB: asks to be allowed once, discrete power
     await manager.capability("tv", "power", "off");
     assert.equal(tv.awake, false);
     assert.equal(state.state.devices.tv.state.power, "off");
+  } finally {
+    cleanup();
+    tv.stop();
+  }
+});
+
+test("turning a wall on wakes a TV that keeps dropping its connection, then selects the wall's input", async () => {
+  identityStore.dir = mkdtempSync(join(tmpdir(), "bv-adb-"));
+  resetAdbKey();
+  const tv = await new FakeFireTv().start();
+  const { manager, state, cleanup } = setup([], false, { powerOnRetryMs: 300, inputAfterOnMs: 50, inputAgainMs: 50 });
+  try {
+    manager.apply(site({
+      devices: [{ id: "tv", name: "TV", profile: "fire-tv", settings: { host: "127.0.0.1", port: tv.port } }],
+      groups: [{ id: "bar", name: "Bar", kind: "wall", devices: ["tv"], powerOnInput: "hdmi2" }],
+    }));
+    await until(() => state.state.devices.tv.state.model === "AFTKRT", 5000);
+    tv.dropNext = 2; // asleep: the TV hangs up on the next two tries
+    await manager.groupCapability("bar", "power", "on");
+    assert.equal(tv.awake, true);
+    await until(() => tv.commands.filter((c) => c.includes("HDMI")).length === 2);
+    assert.deepEqual(tv.commands.filter((c) => c.startsWith("input")), [
+      "input keyevent KEYCODE_WAKEUP",
+      "input keyevent KEYCODE_TV_INPUT_HDMI_2",
+      "input keyevent KEYCODE_TV_INPUT_HDMI_2",
+    ]);
+    assert.equal(state.state.devices.tv.state.input, "hdmi2");
+    // A TV's own setting wins over its wall's.
+    manager.apply(site({
+      devices: [{ id: "tv", name: "TV", profile: "fire-tv", settings: { host: "127.0.0.1", port: tv.port, powerOnInput: "hdmi4" } }],
+      groups: [{ id: "bar", name: "Bar", kind: "wall", devices: ["tv"], powerOnInput: "hdmi2" }],
+    }));
+    assert.equal(manager.powerOnInput("tv"), "hdmi4");
   } finally {
     cleanup();
     tv.stop();

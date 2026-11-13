@@ -22,6 +22,7 @@ export class FakeFireTv {
   trusted: string[] = []; // public keys (base64) the TV accepted
   prompts = 0; // "Allow debugging?" prompts shown
   allow: "yes" | "no" | "wait" = "yes"; // how the person at the TV answers
+  dropNext = 0; // hang up on this many shell commands, like a TV dozing in standby
 
   constructor() {
     this.server = createServer((s) => this.session(s));
@@ -81,6 +82,11 @@ export class FakeFireTv {
         } else if (m.command === CMD.OPEN) {
           const service = m.data.toString("utf8").replace(/\0+$/, "");
           const id = nextId++;
+          if (service.startsWith("shell:input") && this.dropNext > 0) {
+            this.dropNext--;
+            sock.destroy();
+            return;
+          }
           if (!service.startsWith("shell:")) {
             send(CMD.CLSE, 0, m.arg0);
             continue;

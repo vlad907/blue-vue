@@ -36,6 +36,7 @@ export interface SiteGroup {
   staggerMs: number;
   columns?: number;
   mosaic?: { device: string; group: string };
+  powerOnInput?: string;
 }
 
 export interface ListenStatus {

@@ -15,6 +15,14 @@ export interface DeviceView {
   problem?: string; // config problem that stops the device from running
 }
 
+/** How patiently a TV is turned on, and when its input is selected afterwards. */
+export interface PowerOnTiming {
+  powerOnTries: number;
+  powerOnRetryMs: number;
+  inputAfterOnMs: number;
+  inputAgainMs: number;
+}
+
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**
@@ -26,9 +34,12 @@ export class DeviceManager {
   private fingerprints = new Map<string, string>();
   private site?: Site;
   private factory: ConnectionFactory;
+  private timing: PowerOnTiming;
 
-  constructor(private profiles: ProfileLibrary, private state: StateStore, private opts: { simulate: boolean; factory?: ConnectionFactory }) {
+  constructor(private profiles: ProfileLibrary, private state: StateStore, private opts: { simulate: boolean; factory?: ConnectionFactory; timing?: Partial<PowerOnTiming> }) {
     this.factory = opts.factory ?? defaultFactory(opts.simulate);
+    // Simulated TVs wake at once, so the panel stays snappy in simulation.
+    this.timing = { powerOnTries: 8, powerOnRetryMs: 2500, inputAfterOnMs: opts.simulate ? 200 : 4000, inputAgainMs: opts.simulate ? 200 : 6000, ...opts.timing };
   }
 
   apply(site: Site) {
@@ -116,7 +127,47 @@ export class DeviceManager {
     const def = rt.profile.capabilities[cap] as Record<string, string> | undefined;
     if (!def?.[action]) throw new CommandError(`${rt.device.name} doesn't support ${cap}.${action}`);
     const params = def.param !== undefined && value !== undefined ? { [def.param]: value } : {};
-    await rt.execute(def[action], params);
+    if (cap !== "power" || action !== "on") return void (await rt.execute(def[action], params));
+
+    // A TV in standby often drops its connection for a few seconds at a time
+    // (Fire TVs do), so "on" keeps trying for a while instead of failing on the first miss.
+    const t = this.timing;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await rt.execute(def[action], params);
+        break;
+      } catch (err) {
+        if (err instanceof CommandError || attempt >= t.powerOnTries) throw err;
+        await sleep(t.powerOnRetryMs);
+      }
+    }
+    await this.selectPowerOnInput(deviceId);
+  }
+
+  /** The input a TV should show after it's turned on: its own setting, else its wall's. */
+  powerOnInput(deviceId: string): string | undefined {
+    const own = this.site?.devices.find((d) => d.id === deviceId)?.settings.powerOnInput;
+    if (own) return String(own);
+    return this.site?.groups.find((g) => g.kind === "wall" && g.powerOnInput && g.devices.includes(deviceId))?.powerOnInput;
+  }
+
+  /**
+   * After "on": waits for the TV to wake, selects its input, then selects it
+   * once more a little later, since a TV that's still starting can miss the first.
+   */
+  private async selectPowerOnInput(deviceId: string) {
+    const input = this.powerOnInput(deviceId);
+    const rt = this.runtimes.get(deviceId);
+    const src = rt?.profile.capabilities.source as { select?: string; param?: string } | undefined;
+    if (!input || !rt || !src?.select || !src.param) return;
+    const select = () => rt.execute(src.select!, { [src.param!]: input });
+    await sleep(this.timing.inputAfterOnMs);
+    try {
+      await select();
+    } catch (err) {
+      throw new Error(`turned on, but selecting ${input} failed: ${err instanceof Error ? err.message : err}`);
+    }
+    void sleep(this.timing.inputAgainMs).then(select).catch(() => {});
   }
 
   /** Uses a capability on every device in a group (e.g. power a wall of mixed TV models), staggered. */

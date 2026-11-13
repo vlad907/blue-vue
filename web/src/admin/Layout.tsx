@@ -113,6 +113,16 @@ export function Groups() {
                   <Field label="Panels across" help="The wall's width in panels, so the touch panel draws it in its real shape">
                     <Num value={g.columns} integer min={1} max={16} onChange={(v) => set((x) => { x.columns = v; })} />
                   </Field>
+                  {g.kind === "wall" && (
+                    <Field label="Input when turned on" help="On and All on wake each TV, then switch it to this input. One TV can differ: set it on that device.">
+                      <Pick
+                        value={g.powerOnInput}
+                        empty="Leave the input alone"
+                        options={[1, 2, 3, 4].map((n) => ({ value: `hdmi${n}`, label: `HDMI ${n}` }))}
+                        onChange={(v) => set((x) => { x.powerOnInput = v || undefined; })}
+                      />
+                    </Field>
+                  )}
                 </div>
                 {g.kind === "wall" && (
                   <MosaicLink

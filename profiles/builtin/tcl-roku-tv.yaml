@@ -7,10 +7,11 @@ description: >
   Network control through Roku's External Control Protocol (port 8060), no
   pairing needed. On each TV: Settings > System > Power > Fast TV start: On
   (so it can be turned on over the network), and Settings > System >
-  Advanced system settings > Control by mobile apps > Network access:
-  Default or Permissive (with "Limited" or "Disabled" the TV answers 403 and
-  ignores commands). Also turn off Auto power off, and set Power on to Last
-  used input so a wall comes back on the right HDMI.
+  Advanced system settings > Control by mobile apps: Enabled (with "Limited"
+  or "Disabled" the TV still reports its status but answers 403 to On, Off
+  and inputs), with its Network access on Default or Permissive. Also turn
+  off Auto power off. Set the wall's "Input when turned on" in Blue Vue so
+  a wall comes back on the right HDMI.
 
 discover: roku
 
@@ -21,6 +22,7 @@ transport:
 
 settings:
   - { key: host, label: IP address, type: string, required: true }
+  - { key: powerOnInput, label: Input when turned on, type: enum, values: [hdmi1, hdmi2, hdmi3, hdmi4], help: "Optional. Switches to this HDMI input each time Blue Vue turns the TV on. Blank uses the wall's choice (Video walls page)" }
 
 commands:
   power_on:
