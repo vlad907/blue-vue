@@ -1,7 +1,7 @@
 import type { TransportConfig } from "./transports/types.ts";
 
 // Messages between the control server and a wall agent over the agent's
-// outbound WebSocket (ws://server:8080/agent). The agent opens the socket, so
+// outbound WebSocket (ws://server:3000/agent). The agent opens the socket, so
 // wall PCs need no inbound firewall rule. The server owns all device logic;
 // the agent only hosts connections (TCP, serial, IR, ...) on its network.
 

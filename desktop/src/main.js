@@ -8,9 +8,9 @@ const { readFileSync, writeFileSync, mkdirSync } = require("node:fs");
 const { join } = require("node:path");
 const { networkInterfaces } = require("node:os");
 
-const DEFAULT_PORT = 8080;
-// The server installer falls back to these when 8080 is taken.
-const SCAN_PORTS = [8080, 8088, 8180, 8280];
+const DEFAULT_PORT = 3000;
+// The server installer falls back to 3001-3003 when 3000 is taken; 8080 was the old default.
+const SCAN_PORTS = [3000, 3001, 3002, 3003, 8080];
 let win;
 let current; // { url, name } of the connected server
 
@@ -29,7 +29,7 @@ function saveSettings(s) {
   writeFileSync(settingsFile(), JSON.stringify(s, null, 2));
 }
 
-/** "10.0.0.5", "10.0.0.5:9000" or "http://media-server:8080/" -> "http://10.0.0.5:8080" */
+/** "10.0.0.5", "10.0.0.5:9000" or "http://media-server:3000/" -> "http://10.0.0.5:3000" */
 function normalize(address) {
   let a = String(address).trim();
   if (!a) throw new Error("Enter the server's address");

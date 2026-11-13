@@ -26,7 +26,7 @@ export interface AgentConfig {
   // Learned Pronto codes: codes[remote][key]. Copy them into a custom profile's irCodes.
   codes: Record<string, Record<string, string>>;
   apps: AppConfig[];
-  // Outbound link to the control server, e.g. "ws://10.0.10.5:8080/agent".
+  // Outbound link to the control server, e.g. "ws://10.0.10.5:3000/agent".
   // The agent's `name` is its id and `token` must match the site's entry.
   server?: { url: string };
 }
@@ -54,7 +54,7 @@ export function loadConfig(path: string): AgentConfig {
   if (cfg.ir.driver === "command" && !cfg.ir.command && !cfg.simulate) errors.push("ir.command is required for the command driver");
 
   if (raw.panels?.length) console.warn("agent.json: \"panels\" is no longer used; panels are devices in the control server's site now");
-  if (cfg.server && !/^wss?:\/\/.+/.test(cfg.server.url ?? "")) errors.push("server.url must look like ws://control-server:8080/agent");
+  if (cfg.server && !/^wss?:\/\/.+/.test(cfg.server.url ?? "")) errors.push("server.url must look like ws://control-server:3000/agent");
   for (const a of cfg.apps) {
     if (!a.name || !a.process) errors.push("each app needs name and process");
   }

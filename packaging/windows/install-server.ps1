@@ -4,7 +4,7 @@
 #   powershell -ExecutionPolicy Bypass -File .\install-server.ps1
 # Re-run it from a newer package to update; settings and data are kept.
 param(
-    [int]$Port = 8080,               # if 8080 is taken and no -Port is given, the first free of 8088, 8180, 8280 is used
+    [int]$Port = 3000,               # if 3000 is taken and no -Port is given, the first free of 3001, 3002, 3003 is used
     [string]$InstallDir = "$env:ProgramFiles\BlueVue",
     [string]$DataDir = "$env:ProgramData\BlueVue",
     [string]$GracenoteKey,           # optional: TV guide API key, stored in the data folder's .env
@@ -35,14 +35,19 @@ function Get-PortOwner([int]$p) {
 $config = Join-Path $DataDir "system.json"
 if (-not $PSBoundParameters.ContainsKey("Port") -and (Test-Path $config)) {
     $Port = [int](Get-Content $config -Raw | ConvertFrom-Json).server.port
+    # 8080 was the default before 3000; media servers often have other software around 8080-8090.
+    if ($Port -eq 8080) {
+        $Port = 3000
+        Write-Host "Moving Blue Vue from port 8080 to 3000. Tablets, the Mac app and wall agents need the new address." -ForegroundColor Yellow
+    }
 }
 $owner = Get-PortOwner $Port
 if ($owner) {
     if ($PSBoundParameters.ContainsKey("Port")) {
-        throw "Port $Port is already used by $owner. Pick another, e.g. -Port 8088."
+        throw "Port $Port is already used by $owner. Pick another, e.g. -Port 3001."
     }
     $taken = $Port
-    $Port = (8088, 8180, 8280 | Where-Object { -not (Get-PortOwner $_) } | Select-Object -First 1)
+    $Port = (3001, 3002, 3003 | Where-Object { -not (Get-PortOwner $_) } | Select-Object -First 1)
     if (-not $Port) { throw "Port $taken and the alternates are in use. Pick a free port with -Port." }
     Write-Host "Port $taken is used by $owner, so Blue Vue will use port $Port." -ForegroundColor Yellow
 }
@@ -81,6 +86,23 @@ if (Test-Path $config) {
         guide = [pscustomobject][ordered]@{ enabled = $true; apiKeyEnv = "GRACENOTE_API_KEY"; lineupId = ""; hours = 6; refreshMinutes = 30 }
     }
 }
+# With more than one network card and no -Listen, ask which ones to answer on
+# (only on a first install, and only when someone is at the keyboard).
+$hasChoice = $cfg.server.PSObject.Properties.Name -contains "interfaces"
+if (-not $PSBoundParameters.ContainsKey("Listen") -and -not $hasChoice -and [Environment]::UserInteractive) {
+    $cards = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.IPAddress -notmatch "^(127\.|169\.254\.)" } | Sort-Object InterfaceAlias)
+    if ($cards.Count -gt 1) {
+        Write-Host ""
+        Write-Host "This PC has more than one network card:"
+        for ($i = 0; $i -lt $cards.Count; $i++) { Write-Host ("  {0}. {1}  ({2})" -f ($i + 1), $cards[$i].InterfaceAlias, $cards[$i].IPAddress) }
+        $answer = Read-Host "Answer on which? Numbers separated by commas, or Enter for all of them"
+        $picked = @($answer -split "[,\s]+" | Where-Object { $_ -match "^\d+$" -and [int]$_ -ge 1 -and [int]$_ -le $cards.Count } |
+            ForEach-Object { $cards[[int]$_ - 1].InterfaceAlias } | Select-Object -Unique)
+        if ($picked.Count) { $Listen = $picked; $PSBoundParameters["Listen"] = $picked }
+        else { $cfg.server | Add-Member -NotePropertyName interfaces -NotePropertyValue @() -Force } # all; don't ask again on updates
+    }
+}
 if ($PSBoundParameters.ContainsKey("Listen")) {
     $names = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | ForEach-Object { $_.InterfaceAlias; $_.IPAddress }
     foreach ($l in $Listen) { if ($names -notcontains $l) { Write-Warning "No network card or address '$l' on this PC right now. Blue Vue will start answering on it when it appears." } }
@@ -113,17 +135,18 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings `
     -User "SYSTEM" -RunLevel Highest -Description "Blue Vue control server (port $Port)" -Force | Out-Null
 
-# Panels, laptops and wall agents connect in, so open the port on private networks.
+# Panels, laptops and wall agents connect in, so open the port on every network type
+# (Domain, Private and Public), since a media server's AV network is often marked Public.
 Get-NetFirewallRule -DisplayName "Blue Vue Server" -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 New-NetFirewallRule -DisplayName "Blue Vue Server" -Direction Inbound -Protocol TCP -LocalPort $Port `
-    -Action Allow -Profile Domain, Private | Out-Null
+    -Action Allow -Profile Any | Out-Null
 
 Start-ScheduledTask -TaskName $TaskName
 Write-Host "Starting..."
 $hello = $null
-for ($i = 0; $i -lt 20 -and -not $hello; $i++) {
+for ($i = 0; $i -lt 60 -and -not $hello; $i++) {
     Start-Sleep -Seconds 1
-    try { $hello = Invoke-RestMethod "http://localhost:$Port/api/hello" -TimeoutSec 2 } catch {}
+    try { $hello = Invoke-RestMethod "http://127.0.0.1:$Port/api/hello" -TimeoutSec 2 } catch {}
 }
 if (-not $hello) {
     Write-Warning "The server didn't answer on port $Port. See $DataDir\logs\server.log"
@@ -141,6 +164,6 @@ Write-Host ""
 if ($chosen.Count) { Write-Host "Answering only on: $($chosen -join ', '). Change it in the admin under Settings > Network cards." }
 else { Write-Host "Answering on every network. To pick one network card, see the admin's Settings > Network cards, or re-run with -Listen `"Ethernet 2`"." }
 Write-Host "Next: open the admin now and set its password (the first visitor sets it)." -ForegroundColor Yellow
-if ($Port -ne 8080) { Write-Host "Wall PCs: install their agents with -ServerPort $Port." }
+if ($Port -ne 3000) { Write-Host "Wall PCs: install their agents with -ServerPort $Port." }
 Write-Host "Data and logs: $DataDir"
-Write-Host "The network must be set to Private in Windows for laptops and panels to connect."
+Write-Host "Port $Port is open in Windows Firewall (rule 'Blue Vue Server')."

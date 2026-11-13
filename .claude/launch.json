@@ -6,7 +6,7 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "env": { "BLUEVUE_SIMULATE": "1" },
-      "port": 8080
+      "port": 3000
     }
   ]
 }

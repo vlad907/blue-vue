@@ -6,7 +6,7 @@ import type { AgentToServer, ServerToAgent, WirePayload } from "./link-protocol.
 import { type Connection, type RenderedPayload, createConnection } from "./transports/index.ts";
 
 export interface LinkOptions {
-  url: string; // ws://control-server:8080/agent
+  url: string; // ws://control-server:3000/agent
   id: string;
   token: string;
   version: string;

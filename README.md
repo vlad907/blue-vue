@@ -11,7 +11,7 @@ Built-in profiles: the mosaic engine (video wall content), AtlasIED Atmosphere, 
 ```
  tablets ──http/ws──▶  control server (Windows mini PC)  ◀──ws── wall agent (each video wall PC)
                         • profile engine, scenes, guide            • connects to that wall's TVs,
-                        • touch panel at :8080                       iTach and COM ports for the server
+                        • touch panel at :3000                       iTach and COM ports for the server
                         • devices on its own network               • keeps the mosaic software running
 ```
 
@@ -32,9 +32,9 @@ On first start the server creates `data/site.json`:
 - If `config/system.local.json` is an old-format config with devices in it, it's migrated. Wall panels need the walls' `agent.json` files; see `scripts/migrate-config.ts`.
 - Otherwise the server copies [config/example-site.json](config/example-site.json) as a starting point.
 
-Open `http://<control-pc-ip>:8080` on any tablet on the network. On an iPad, use "Add to Home Screen" so it runs full-screen.
+Open `http://<control-pc-ip>:3000` on any tablet on the network. On an iPad, use "Add to Home Screen" so it runs full-screen.
 
-While working on the panel, `npm run dev:web` serves it with hot reload on :5173, with API calls forwarded to :8080.
+While working on the panel, `npm run dev:web` serves it with hot reload on :5173, with API calls forwarded to :3000.
 
 ## Install
 
@@ -47,28 +47,28 @@ Copy the zip to the media server, unzip it, and in an elevated PowerShell in tha
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install-server.ps1
 ```
-This installs Blue Vue as a background task that starts with Windows and restarts if it stops. Program files go to `C:\Program Files\BlueVue`, and data to `C:\ProgramData\BlueVue`, readable by Administrators only. It also opens port 8080 for Private and Domain networks and prints the panel and admin addresses. Open the admin right away and set its password, since whoever opens it first sets it. To update, run the installer from a newer zip; your data is kept. The package includes its own Node, so nothing else needs installing. `install-server.ps1 -GracenoteKey <key>` stores the TV guide key; `uninstall-server.ps1` removes it. The zip's README.txt has the details.
+This installs Blue Vue as a background task that starts with Windows and restarts if it stops. Program files go to `C:\Program Files\BlueVue`, and data to `C:\ProgramData\BlueVue`, readable by Administrators only. If 3000 is taken (by something other than an earlier Blue Vue) it uses 3001, 3002 or 3003 and says so; an earlier install on the old default 8080 is moved to 3000. It opens the port in Windows Firewall on every network type (Domain, Private and Public) and prints the panel and admin addresses. Open the admin right away and set its password, since whoever opens it first sets it. To update, run the installer from a newer zip; your data is kept. The package includes its own Node, so nothing else needs installing. `install-server.ps1 -GracenoteKey <key>` stores the TV guide key; `uninstall-server.ps1` removes it. The zip's README.txt has the details.
 
-**Two network cards** (say one for the office and one for the AV network): by default Blue Vue answers on every network. To answer on only some, open the admin's **Settings → Network cards**, choose **Only these** and tick the cards. It applies right away, with no restart, and the admin warns you before you cut off the browser you're using. The PC itself can always reach Blue Vue at `http://localhost:8080`. The installer takes the same choice with `-Listen "Ethernet 2"`. Devices are reached on whichever network they're on, and wake-on-LAN goes out on every network card.
+**Two network cards** (say one for the office and one for the AV network): by default Blue Vue answers on every network. To answer on only some, open the admin's **Settings → Network cards**, choose **Only these** and tick the cards. It applies right away, with no restart, and the admin warns you before you cut off the browser you're using. The PC itself can always reach Blue Vue at `http://localhost:3000`. The installer takes the same choice with `-Listen "Ethernet 2"`, and on a first install on a PC with more than one network card it asks which to answer on (Enter for all of them). Devices are reached on whichever network they're on, and wake-on-LAN goes out on every network card.
 
 ### Mac app
 ```bash
 npm run package:mac        # -> release/mac/Blue Vue-<version>-arm64.dmg (Apple silicon) and Blue Vue-<version>.dmg (Intel)
 ```
-Open the dmg and drag Blue Vue to Applications. The app is signed for local use only, not by Apple, so the first time, right-click it and choose **Open**. Then type the media server's address or press **Find servers**, which scans this Mac's local network for Blue Vue on port 8080. The app remembers the server and reconnects on launch. ⌘1 shows the control panel, ⌘2 the admin, ⌘K switches servers. The pages come from the server, so updating the server updates what the app shows.
+Open the dmg and drag Blue Vue to Applications. The app is signed for local use only, not by Apple, so the first time, right-click it and choose **Open**. Then type the media server's address or press **Find servers**, which scans this Mac's local network for Blue Vue on port 3000. The app remembers the server and reconnects on launch. ⌘1 shows the control panel, ⌘2 the admin, ⌘K switches servers. The pages come from the server, so updating the server updates what the app shows.
 
 ### From source (alternative)
 **Install on the Windows control PC** (elevated PowerShell, from the project folder):
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
 ```
-The first run creates `config\system.local.json` and a `.env` file for secrets (the Gracenote key). Fill them in and run the script again. The second run builds the panel, sets the server to start at boot and restart if it exits, and opens port 8080 to the local network. Logs go to `logs\server.log`.
+The first run creates `config\system.local.json` and a `.env` file for secrets (the Gracenote key). Fill them in and run the script again. The second run builds the panel, sets the server to start at boot and restart if it exits, and opens port 3000 to the local network. Logs go to `logs\server.log`.
 
 `config/system.json` only holds server settings (port, data folder, simulation, guide). Everything else is in the site.
 
 ## Setting up a site
 
-Open **`http://<control-pc-ip>:8080/admin`** (or **⚙ Admin** on the touch panel). On the first visit you choose the admin password. From there:
+Open **`http://<control-pc-ip>:3000/admin`** (or **⚙ Admin** on the touch panel). On the first visit you choose the admin password. From there:
 - **Devices**: add a device by picking its type. The settings form comes from the device's profile. Choose whether it's reached from the control server or a wall PC. **Test** sends any command and shows the device's live traffic.
 - **Video walls**, **Rooms**, **Scenes** (step by step, with a Run button), **Channels** (with Gracenote lookup by ZIP code).
 - **Wall PCs**: a newly installed agent shows up under "Waiting for approval". Approve it, and it connects within 10 seconds.

@@ -4,7 +4,7 @@
   "token": "CHANGE-ME-to-a-long-random-string",
   "simulate": false,
   "server": {
-    "url": "ws://10.0.10.5:8080/agent"
+    "url": "ws://10.0.10.5:3000/agent"
   },
   "pollSeconds": 15,
   "ir": {

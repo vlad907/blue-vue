@@ -8,7 +8,7 @@ export const ConfigSchema = z.object({
   server: z
     .object({
       host: z.string().default("0.0.0.0"), // older setting: one address to listen on
-      port: z.number().int().default(8080),
+      port: z.number().int().default(3000),
       // Network card names ("Ethernet 2") or IPv4 addresses to answer on; empty means every network.
       interfaces: z.array(z.string()).default([]),
     })

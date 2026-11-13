@@ -2,7 +2,7 @@
 # Run in an elevated PowerShell from the project folder:
 #   powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
 param(
-    [int]$Port = 8080,
+    [int]$Port = 3000,
     [string]$TaskName = "BlueVueServer"
 )
 $ErrorActionPreference = "Stop"
