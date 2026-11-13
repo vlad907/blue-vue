@@ -43,7 +43,7 @@ export function loadConfig(path?: string): Config {
   if (!file) throw new Error(`No config found. Looked in: ${candidates.join(", ")}`);
 
   // Older config files also hold devices; those keys are ignored here and read by the first-run migration.
-  const cfg = { ...ConfigSchema.parse(JSON.parse(readFileSync(file, "utf8"))), file };
+  const cfg = { ...ConfigSchema.parse(JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, ""))), file };
   if (process.env.BLUEVUE_SIMULATE === "1") cfg.simulate = true;
   if (process.env.BLUEVUE_DATA) cfg.dataDir = process.env.BLUEVUE_DATA;
   cfg.dataDir = resolve(cfg.dataDir);

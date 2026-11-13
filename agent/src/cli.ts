@@ -90,7 +90,7 @@ async function send(args: string[], configPath: string) {
 
 /** Writes one code into agent.json, keeping everything else in the file. */
 function saveCode(configPath: string, remote: string, key: string, pronto: string) {
-  const raw = JSON.parse(readFileSync(configPath, "utf8"));
+  const raw = JSON.parse(readFileSync(configPath, "utf8").replace(/^\uFEFF/, ""));
   raw.codes ??= {};
   raw.codes[remote] ??= {};
   raw.codes[remote][key] = pronto;

@@ -32,7 +32,7 @@ export interface AgentConfig {
 }
 
 export function loadConfig(path: string): AgentConfig {
-  const raw = JSON.parse(readFileSync(path, "utf8"));
+  const raw = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
   const cfg: AgentConfig = {
     name: raw.name,
     port: raw.port ?? 8095,

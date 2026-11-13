@@ -108,7 +108,8 @@ if ($PSBoundParameters.ContainsKey("Listen")) {
     foreach ($l in $Listen) { if ($names -notcontains $l) { Write-Warning "No network card or address '$l' on this PC right now. Blue Vue will start answering on it when it appears." } }
     $cfg.server | Add-Member -NotePropertyName interfaces -NotePropertyValue @($Listen) -Force
 }
-$cfg | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 $config
+# Written without a byte-order mark: Windows PowerShell's "-Encoding UTF8" adds one, which older servers can't read.
+[IO.File]::WriteAllText($config, ($cfg | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding $false))
 $Port = [int]$cfg.server.port
 
 if ($GracenoteKey) {
@@ -149,7 +150,8 @@ for ($i = 0; $i -lt 60 -and -not $hello; $i++) {
     try { $hello = Invoke-RestMethod "http://127.0.0.1:$Port/api/hello" -TimeoutSec 2 } catch {}
 }
 if (-not $hello) {
-    Write-Warning "The server didn't answer on port $Port. See $DataDir\logs\server.log"
+    Write-Warning "The server didn't answer on port $Port. The last lines of $DataDir\logs\server.log:"
+    Get-Content (Join-Path $DataDir "logs\server.log") -Tail 15 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
     exit 1
 }
 
@@ -167,3 +169,10 @@ Write-Host "Next: open the admin now and set its password (the first visitor set
 if ($Port -ne 3000) { Write-Host "Wall PCs: install their agents with -ServerPort $Port." }
 Write-Host "Data and logs: $DataDir"
 Write-Host "Port $Port is open in Windows Firewall (rule 'Blue Vue Server')."
+
+# A "Blue Vue" icon on the desktop that opens the panel in the browser, and the
+# admin opened now so its password gets set.
+$desktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
+if ($desktop) { Set-Content -Encoding ASCII (Join-Path $desktop "Blue Vue.url") "[InternetShortcut]`r`nURL=http://localhost:$Port/" }
+Write-Host "Other computers, tablets and phones need no app: they open the Panel address above in any web browser."
+if ([Environment]::UserInteractive) { try { Start-Process "http://localhost:$Port/admin" } catch {} }

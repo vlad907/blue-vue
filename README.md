@@ -43,10 +43,12 @@ Build the package on any machine with this repo (needs internet the first time, 
 ```bash
 npm run package:server     # -> release/BlueVue-Server-<version>-win-x64.zip
 ```
-Copy the zip to the media server, unzip it, and in an elevated PowerShell in that folder run:
+Copy the zip to the media server, unzip it (right-click → Extract All), and double-click **Install Blue Vue**. Say Yes when Windows asks for permission. The same thing from an elevated PowerShell, for options like `-Port`:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install-server.ps1
 ```
+When it finishes it opens the admin in the browser and puts a **Blue Vue** icon on the desktop. **No app is needed to use Blue Vue**: any computer, tablet or phone on the network opens `http://<media-server-ip>:3000` in a web browser. The Mac app is an optional window onto the same pages.
+
 This installs Blue Vue as a background task that starts with Windows and restarts if it stops. Program files go to `C:\Program Files\BlueVue`, and data to `C:\ProgramData\BlueVue`, readable by Administrators only. If 3000 is taken (by something other than an earlier Blue Vue) it uses 3001, 3002 or 3003 and says so; an earlier install on the old default 8080 is moved to 3000. It opens the port in Windows Firewall on every network type (Domain, Private and Public) and prints the panel and admin addresses. Open the admin right away and set its password, since whoever opens it first sets it. To update, run the installer from a newer zip; your data is kept. The package includes its own Node, so nothing else needs installing. `install-server.ps1 -GracenoteKey <key>` stores the TV guide key; `uninstall-server.ps1` removes it. The zip's README.txt has the details.
 
 **Two network cards** (say one for the office and one for the AV network): by default Blue Vue answers on every network. To answer on only some, open the admin's **Settings → Network cards**, choose **Only these** and tick the cards. It applies right away, with no restart, and the admin warns you before you cut off the browser you're using. The PC itself can always reach Blue Vue at `http://localhost:3000`. The installer takes the same choice with `-Listen "Ethernet 2"`, and on a first install on a PC with more than one network card it asks which to answer on (Enter for all of them). Devices are reached on whichever network they're on, and wake-on-LAN goes out on every network card.

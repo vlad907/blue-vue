@@ -127,7 +127,7 @@ export class SiteStore {
   }
 
   load(): Site {
-    return SiteSchema.parse(JSON.parse(readFileSync(this.file, "utf8")));
+    return SiteSchema.parse(JSON.parse(readFileSync(this.file, "utf8").replace(/^\uFEFF/, "")));
   }
 
   /** Validates, snapshots the previous version, and writes atomically. Returns problems instead of saving. */
@@ -155,7 +155,7 @@ export class SiteStore {
     if (!/^site-[\w-]+\.json$/.test(name)) throw Object.assign(new Error("Invalid snapshot name"), { statusCode: 400 });
     const file = join(this.snapshotDir, name);
     if (!existsSync(file)) throw Object.assign(new Error(`No snapshot "${name}"`), { statusCode: 404 });
-    return this.save(JSON.parse(readFileSync(file, "utf8")));
+    return this.save(JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, "")));
   }
 
   snapshots(): string[] {

@@ -18,7 +18,7 @@ export function ensureSite(dataDir: string, configFile: string) {
   const store = new SiteStore(dataDir);
   if (store.exists()) return;
 
-  const raw = JSON.parse(readFileSync(configFile, "utf8"));
+  const raw = JSON.parse(readFileSync(configFile, "utf8").replace(/^\uFEFF/, ""));
   const isLegacy = Array.isArray(raw.cableBoxes) || Array.isArray(raw.endpoints) || raw.atlas;
   if (isLegacy) {
     const { site, profiles, warnings } = migrate(LegacyConfigSchema.parse(raw), {});
@@ -32,7 +32,7 @@ export function ensureSite(dataDir: string, configFile: string) {
   }
 
   if (!existsSync(EXAMPLE_SITE)) throw new Error(`No site at ${store.file} and no example site to start from`);
-  const { errors } = store.save(JSON.parse(readFileSync(EXAMPLE_SITE, "utf8")));
+  const { errors } = store.save(JSON.parse(readFileSync(EXAMPLE_SITE, "utf8").replace(/^\uFEFF/, "")));
   if (errors.length) throw new Error(`Example site is invalid:\n  ${errors.join("\n  ")}`);
   console.log(`[site] created ${store.file} from the example site; edit it in the admin UI`);
 }

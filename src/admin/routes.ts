@@ -93,7 +93,7 @@ export function registerAdminRoutes(app: FastifyInstance, cfg: Config, engine: E
         throw fail(400, err instanceof Error ? err.message : String(err));
       }
       // Keep it for restarts, leaving the rest of the settings file alone.
-      const raw = JSON.parse(readFileSync(cfg.file, "utf8"));
+      const raw = JSON.parse(readFileSync(cfg.file, "utf8").replace(/^\uFEFF/, ""));
       raw.server = { ...(raw.server ?? {}), interfaces };
       delete raw.server.host;
       writeFileSync(cfg.file, JSON.stringify(raw, null, 2) + "\n");

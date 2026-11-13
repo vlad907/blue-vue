@@ -24,6 +24,9 @@ Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyC
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Get-NetFirewallRule -DisplayName "Blue Vue Server" -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 
+$shortcut = Join-Path ([Environment]::GetFolderPath("CommonDesktopDirectory")) "Blue Vue.url"
+if (Test-Path $shortcut) { Remove-Item -Force $shortcut }
+
 Start-Sleep -Seconds 1
 if (Test-Path $InstallDir) { Remove-Item -Recurse -Force $InstallDir }
 if ($RemoveData -and (Test-Path $DataDir)) {

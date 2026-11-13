@@ -40,7 +40,7 @@ export class AdminAuth {
 
   check(password: string): boolean {
     if (this.setupRequired) return false;
-    const stored: Stored = JSON.parse(readFileSync(this.file, "utf8"));
+    const stored: Stored = JSON.parse(readFileSync(this.file, "utf8").replace(/^\uFEFF/, ""));
     const got = scryptSync(password, stored.salt, 64);
     return timingSafeEqual(got, Buffer.from(stored.hash, "hex"));
   }

@@ -49,7 +49,7 @@ async function main() {
   cpSync(join(ROOT, "config/example-site.json"), join(STAGE, "config/example-site.json"));
   cpSync(join(ROOT, "config/system.json"), join(STAGE, "config/system.json")); // for Start-BlueVue.cmd
   writeFileSync(join(STAGE, "package.json"), JSON.stringify({ name: "blue-vue-server", version: pkg.version, private: true }, null, 2));
-  for (const f of ["install-server.ps1", "uninstall-server.ps1", "Start-BlueVue.cmd", "README.txt"]) {
+  for (const f of ["Install Blue Vue.cmd", "Uninstall Blue Vue.cmd", "install-server.ps1", "uninstall-server.ps1", "Start-BlueVue.cmd", "README.txt"]) {
     // Windows line endings: cmd.exe misreads labels in LF-only batch files.
     const text = readFileSync(join(ROOT, "packaging/windows", f), "utf8").replace(/\r?\n/g, "\r\n");
     writeFileSync(join(STAGE, f), text);
