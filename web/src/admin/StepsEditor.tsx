@@ -15,6 +15,7 @@ const KINDS = [
   { value: "adb", label: "ADB shell", transports: ["adb"] },
   { value: "wol", label: "Wake-on-LAN", transports: ["wol"] },
   { value: "androidtv", label: "Android TV remote", transports: ["androidtv"] },
+  { value: "appletv", label: "Apple TV remote", transports: ["appletv"] },
   { value: "delay", label: "Wait" },
   { value: "forEachChar", label: "For each character…" },
   { value: "forEach", label: "For each item in a list…" },
@@ -24,7 +25,7 @@ const KINDS = [
 type Kind = (typeof KINDS)[number]["value"];
 
 export function kindOf(step: Step): Kind {
-  for (const k of ["forEachChar", "forEach", "delay", "command", "send", "hex", "http", "ir", "adb", "wol", "androidtv"] as const) if (k in step) return k;
+  for (const k of ["forEachChar", "forEach", "delay", "command", "send", "hex", "http", "ir", "adb", "wol", "androidtv", "appletv"] as const) if (k in step) return k;
   return "send";
 }
 
@@ -37,6 +38,7 @@ function blank(kind: Kind): Step {
     case "adb": return { adb: "" };
     case "wol": return { wol: true };
     case "androidtv": return { androidtv: { key: "HOME" } };
+    case "appletv": return { appletv: { key: "select" } };
     case "delay": return { delay: 500 };
     case "forEachChar": return { forEachChar: "{{channel}}", steps: [] };
     case "forEach": return { forEach: "settings.zones", steps: [] };
@@ -152,6 +154,28 @@ function StepFields({ step, kind, onChange, profile }: { step: Step; kind: Kind;
           </Field>
           <Field label={mode === "power" ? "on or off" : mode === "appLink" ? "Link" : "Key"} help={mode === "key" ? "e.g. HOME, DPAD_UP, TV_INPUT_HDMI_1, a number, or {{key}}" : undefined}>
             <input className="mono" type="text" value={String(a[mode] ?? "")} onChange={(e) => onChange({ androidtv: { [mode]: e.target.value } })} />
+          </Field>
+        </div>
+      );
+    }
+    case "appletv": {
+      const a = step.appletv ?? {};
+      const mode = a.power !== undefined ? "power" : a.app !== undefined ? "app" : "key";
+      return (
+        <div className="aform inline">
+          <Field label="Action">
+            <Pick
+              value={mode}
+              options={[
+                { value: "key", label: "Press a key" },
+                { value: "power", label: "Power on/off" },
+                { value: "app", label: "Open an app" },
+              ]}
+              onChange={(m) => onChange({ appletv: m === "power" ? { power: "on" } : m === "app" ? { app: "" } : { key: "select" } })}
+            />
+          </Field>
+          <Field label={mode === "power" ? "on or off" : mode === "app" ? "App id or link" : "Key"} help={mode === "key" ? "e.g. select, menu, home, up, play_pause, or {{key}}" : mode === "app" ? "e.g. com.netflix.Netflix" : undefined}>
+            <input className="mono" type="text" value={String(a[mode] ?? "")} onChange={(e) => onChange({ appletv: { [mode]: e.target.value } })} />
           </Field>
         </div>
       );

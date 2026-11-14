@@ -13,7 +13,8 @@ export type WirePayload =
   | { kind: "ir"; pronto: string; repeat: number; label?: string }
   | { kind: "adb"; args: string[] }
   | { kind: "wol" }
-  | { kind: "androidtv"; key?: string | number; power?: "on" | "off"; appLink?: string };
+  | { kind: "androidtv"; key?: string | number; power?: "on" | "off"; appLink?: string }
+  | { kind: "appletv"; key?: string; power?: "on" | "off"; app?: string };
 
 export interface AgentAppStatus {
   name: string;
@@ -41,8 +42,8 @@ export type ServerToAgent =
   // Puts an iTach near this wall into learning mode; the reply text is the learned sendir code.
   | { type: "ir.learn"; reqId: number; host: string; port?: number; timeoutMs: number }
   // Android TV remote pairing with a TV near this wall: "start" makes the TV show a code, "finish" sends it.
-  | { type: "atv.pair"; reqId: number; host: string; step: "start" | "finish" | "cancel"; code?: string }
+  | { type: "atv.pair"; reqId: number; host: string; step: "start" | "finish" | "cancel"; code?: string; kind?: "androidtv" | "appletv" }
   // Looks for Android / Google TVs on this wall's network; the reply text is JSON (FoundTv[]).
-  | { type: "atv.scan"; reqId: number; subnets?: string[]; kind?: "androidtv" | "roku" | "adb" };
+  | { type: "atv.scan"; reqId: number; subnets?: string[]; kind?: "androidtv" | "roku" | "adb" | "appletv" };
 
 export const PROTOCOL_VERSION = "1";

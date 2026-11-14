@@ -24,6 +24,16 @@ const AndroidTvPayload = z
   .strict()
   .refine((p) => [p.key, p.power, p.appLink].filter((x) => x !== undefined).length === 1, { message: "androidtv needs exactly one of key, power, appLink" });
 
+/** Apple TV: a remote key, discrete power, or an app to open (its bundle id, or a link). */
+const AppleTvPayload = z
+  .object({
+    key: z.string().optional(), // "select", "menu", "home", "play_pause"... or a template
+    power: z.string().optional(), // template giving "on" or "off"
+    app: z.string().optional(), // template, e.g. "com.netflix.Netflix"
+  })
+  .strict()
+  .refine((p) => [p.key, p.power, p.app].filter((x) => x !== undefined).length === 1, { message: "appletv needs exactly one of key, power, app" });
+
 /** One thing sent to the device. Exactly one transport key is set. */
 export const Payload = z
   .object({
@@ -34,9 +44,10 @@ export const Payload = z
     adb: z.string().optional(), // adb shell arguments (template)
     wol: z.literal(true).optional(), // wake-on-LAN using settings.mac
     androidtv: AndroidTvPayload.optional(),
+    appletv: AppleTvPayload.optional(),
   })
-  .refine((p) => ["send", "hex", "http", "ir", "adb", "wol", "androidtv"].filter((k) => p[k as keyof typeof p] !== undefined).length === 1, {
-    message: "a payload needs exactly one of send, hex, http, ir, adb, wol, androidtv",
+  .refine((p) => ["send", "hex", "http", "ir", "adb", "wol", "androidtv", "appletv"].filter((k) => p[k as keyof typeof p] !== undefined).length === 1, {
+    message: "a payload needs exactly one of send, hex, http, ir, adb, wol, androidtv, appletv",
   });
 export type Payload = z.infer<typeof Payload>;
 
@@ -145,6 +156,7 @@ export type Control = {
   keys?: Record<string, string>; // dpad/keypad: button -> param value
   repeat?: string; // group: repeat for each item of a settings list
   options?: string; // select/presets: settings list to offer, e.g. "settings.favorites"
+  when?: string; // shown only while this state value or list has something in it
   controls?: Control[];
 };
 export const Control: z.ZodType<Control> = z.lazy(() =>
@@ -160,6 +172,7 @@ export const Control: z.ZodType<Control> = z.lazy(() =>
     keys: z.record(z.string()).optional(),
     repeat: z.string().optional(),
     options: z.string().optional(),
+    when: z.string().optional(),
     controls: z.array(Control).optional(),
   }),
 );
@@ -180,7 +193,7 @@ export type Capabilities = z.infer<typeof Capabilities>;
 // --- Transport --------------------------------------------------------------
 
 export const Transport = z.object({
-  type: z.enum(["tcp", "udp", "http", "serial", "ir", "adb", "wol", "androidtv"]),
+  type: z.enum(["tcp", "udp", "http", "serial", "ir", "adb", "wol", "androidtv", "appletv"]),
   port: z.number().int().positive().optional(),
   terminator: z.string().optional(), // appended to `send` payloads, e.g. "\r"
   delimiter: z.string().optional(), // splits incoming data into messages; default "\n"
@@ -204,7 +217,7 @@ export const ProfileSchema = z.object({
 
   transport: Transport,
   // How "Add TVs" finds this kind of device on the network.
-  discover: z.enum(["androidtv", "roku", "adb"]).optional(),
+  discover: z.enum(["androidtv", "roku", "adb", "appletv"]).optional(),
   settings: z.array(SettingField).default([]),
   commands: z.record(Command),
   irCodes: z.record(z.string()).default({}), // Pronto hex by key name

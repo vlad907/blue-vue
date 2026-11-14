@@ -25,6 +25,7 @@ export interface Control {
   keys?: Record<string, string>;
   repeat?: string;
   options?: string;
+  when?: string;
   controls?: Control[];
 }
 

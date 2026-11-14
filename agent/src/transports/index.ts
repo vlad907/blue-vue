@@ -1,5 +1,6 @@
 import { AdbConnection, HttpConnection, IrConnection, SimulatedConnection, UdpConnection, WolConnection } from "./others.ts";
 import { AndroidTvConnection } from "./androidtv/remote.ts";
+import { AppleTvConnection } from "./appletv/helper.ts";
 import { SerialConnection } from "./serial.ts";
 import { TcpConnection } from "./tcp.ts";
 import type { Connection, ConnectionSettings, TransportConfig } from "./types.ts";
@@ -18,5 +19,6 @@ export function createConnection(cfg: TransportConfig, settings: ConnectionSetti
     case "wol": return new WolConnection(cfg, settings);
     case "serial": return new SerialConnection(cfg, settings);
     case "androidtv": return new AndroidTvConnection(cfg, settings);
+    case "appletv": return new AppleTvConnection(cfg, settings);
   }
 }

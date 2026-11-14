@@ -24,6 +24,51 @@ settings:
   - { key: apiKey, label: API key, type: string, help: "Only if one is set in the mosaic editor" }
 
 commands:
+  # Everything about the canvas in one request. The poll below uses the same
+  # rules. Lists are kept whole (for the panel's buttons) and per group (for
+  # "which preset is on").
+  read_control:
+    label: Read walls, presets and streams
+    hidden: true
+    steps: [{ http: { method: GET, path: "/api/control?canvas={{settings.canvas}}" } }]
+    parse: &control
+      - jsonPath: $.groups
+        set: { groupList: "{{value}}" }
+      - jsonPath: "$.groups[*]"
+        set:
+          "groups.{{value.id}}.name": "{{value.name}}"
+          "groups.{{value.id}}.activePreset": "{{value.activePreset}}"
+          "groups.{{value.id}}.presets": "{{value.presets}}"
+          "groups.{{value.id}}.noSignal": "{{value.noSignal}}"
+          "groups.{{value.id}}.showing": "{{value.showing}}"
+          "groups.{{value.id}}.on": "{{value.on}}"
+          "groups.{{value.id}}.arrangement": "{{value.arrangement}}"
+          "groups.{{value.id}}.arrangements": "{{value.arrangements}}"
+          "groups.{{value.id}}.slots": "{{value.slots}}"
+      - jsonPath: $.scenes
+        set: { sceneList: "{{value}}" }
+      - jsonPath: $.layouts
+        set: { layoutList: "{{value}}" }
+      - jsonPath: $.layout.name
+        set: { layout: "{{value}}" }
+      - jsonPath: $.ndi.streams
+        set: { streams: "{{value}}" }
+      - jsonPath: $.endpoints
+        set: { endpointList: "{{value}}" }
+      - jsonPath: "$.endpoints[*]"
+        set:
+          "endpoints.{{value.id}}.online": "{{value.online}}"
+          "endpoints.{{value.id}}.displaysOk": "{{value.displaysOk}}"
+          "endpoints.{{value.id}}.displays": "{{value.displays}}"
+      - jsonPath: $.playlists
+        set: { playlists: "{{value}}" }
+      - jsonPath: $.background
+        set:
+          "background.on": "{{value.on}}"
+          "background.ndiName": "{{value.ndiName}}"
+          "background.playlist": "{{value.playlist}}"
+          "background.signal": "{{value.signal}}"
+
   recall_preset:
     label: Recall wall preset
     params:
@@ -74,6 +119,147 @@ commands:
           method: POST
           path: "/api/walls/{{group}}/restart?canvas={{settings.canvas}}"
           body: "{}"
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+
+  # Split screens. An arrangement divides a wall into numbered slots; each slot
+  # plays a stream or a playlist. These read the engine again right after the
+  # change, so the panel shows the result at once.
+  arrange:
+    label: Split a wall (one, two, four, five, per panel)
+    params:
+      group: { type: string, label: Wall, optionsFrom: state.groupList }
+      arrangement: { type: string, label: Arrangement, optionsFrom: "state.groups.{{group}}.arrangements" }
+      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 500 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/walls/{{group}}/arrange?canvas={{settings.canvas}}"
+          body: '{"arrangement": {{arrangement | json}}, "transitionMs": {{transitionMs}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+      - { command: read_control }
+
+  slot_stream:
+    label: Put a stream in one slot of a wall
+    params:
+      group: { type: string, label: Wall, optionsFrom: state.groupList }
+      slot: { type: integer, label: Slot, min: 1, max: 64, default: 1 }
+      ndiName: { type: string, label: NDI stream, optionsFrom: state.streams }
+      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 500 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/walls/{{group}}/slots/{{slot}}?canvas={{settings.canvas}}"
+          body: '{"ndiName": {{ndiName | json}}, "transitionMs": {{transitionMs}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+      - { command: read_control }
+
+  slot_playlist:
+    label: Put a playlist in one slot of a wall
+    params:
+      group: { type: string, label: Wall, optionsFrom: state.groupList }
+      slot: { type: integer, label: Slot, min: 1, max: 64, default: 1 }
+      playlist: { type: string, label: Playlist, optionsFrom: state.playlists }
+      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 500 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/walls/{{group}}/slots/{{slot}}?canvas={{settings.canvas}}"
+          body: '{"playlist": {{playlist | json}}, "transitionMs": {{transitionMs}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+      - { command: read_control }
+
+  slot_empty:
+    label: Empty one slot of a wall
+    params:
+      group: { type: string, label: Wall, optionsFrom: state.groupList }
+      slot: { type: integer, label: Slot, min: 1, max: 64, default: 1 }
+      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 500 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/walls/{{group}}/slots/{{slot}}?canvas={{settings.canvas}}"
+          body: '{"transitionMs": {{transitionMs}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+      - { command: read_control }
+
+  content:
+    label: Wall content on or off
+    params:
+      group: { type: string, label: Wall, optionsFrom: state.groupList }
+      "on": { type: boolean, label: "On", default: true }
+      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 500 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/walls/{{group}}/content?canvas={{settings.canvas}}"
+          body: '{"on": {{on}}, "transitionMs": {{transitionMs}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+      - { command: read_control }
+
+  save_preset:
+    label: Save what a wall shows as a preset
+    params:
+      group: { type: string, label: Wall, optionsFrom: state.groupList }
+      name: { type: string, label: "Preset name (the same name overwrites)" }
+    steps:
+      - http:
+          method: POST
+          path: "/api/walls/{{group}}/presets?canvas={{settings.canvas}}"
+          body: '{"name": {{name | json}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+      - { command: read_control }
+
+  # The background plays under every wall of the canvas.
+  background_on:
+    label: Background on or off
+    params:
+      "on": { type: boolean, label: "On", default: true }
+      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 1000 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/background?canvas={{settings.canvas}}"
+          body: '{"on": {{on}}, "transitionMs": {{transitionMs}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+      - { command: read_control }
+
+  background_stream:
+    label: Background plays a stream
+    params:
+      ndiName: { type: string, label: NDI stream, optionsFrom: state.streams }
+      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 1000 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/background?canvas={{settings.canvas}}"
+          body: '{"on": true, "ndiName": {{ndiName | json}}, "transitionMs": {{transitionMs}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+      - { command: read_control }
+
+  background_playlist:
+    label: Background plays a playlist
+    params:
+      playlist: { type: string, label: Playlist, optionsFrom: state.playlists }
+      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 1000 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/background?canvas={{settings.canvas}}"
+          body: '{"on": true, "playlist": {{playlist | json}}, "transitionMs": {{transitionMs}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+      - { command: read_control }
+
+  # Setup help: every screen of a receiving PC shows its number for 10 minutes.
+  identify_screens:
+    label: Show screen numbers on a wall PC
+    params:
+      endpoint: { type: string, label: Wall PC, optionsFrom: state.endpointList }
+      "on": { type: boolean, label: Showing, default: true }
+    steps:
+      - http:
+          method: POST
+          path: "/api/endpoints/{{endpoint}}/identify?canvas={{settings.canvas}}"
+          body: '{"on": {{on}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
 
   # Sound outputs. The engine takes the whole list back, so each change reads
@@ -161,37 +347,20 @@ state:
   "audio.*.mute": { type: boolean, label: Muted }
   "audio.*.source": { type: string, label: Plays }
   "audio.*.problem": { type: string, label: Sound problem }
+  "groups.*.on": { type: boolean, label: Content on }
+  "groups.*.arrangement": { type: string, label: Split }
+  "background.on": { type: boolean, label: Background on }
+  "background.ndiName": { type: string, label: Background stream }
+  "background.playlist": { type: string, label: Background playlist }
+  "background.signal": { type: string, label: Background signal }
+  "canvases.*.running": { type: boolean, label: Canvas running }
+  "canvases.*.error": { type: string, label: Canvas problem }
 
-# One request describes everything; read it every few seconds. Lists are kept
-# whole (for the panel's buttons) and per group (for "which preset is on").
+# Read everything every few seconds (the rules are read_control's).
 polls:
   - every: 3
     steps: [{ http: { method: GET, path: "/api/control?canvas={{settings.canvas}}" } }]
-    parse:
-      - jsonPath: $.groups
-        set: { groupList: "{{value}}" }
-      - jsonPath: "$.groups[*]"
-        set:
-          "groups.{{value.id}}.name": "{{value.name}}"
-          "groups.{{value.id}}.activePreset": "{{value.activePreset}}"
-          "groups.{{value.id}}.presets": "{{value.presets}}"
-          "groups.{{value.id}}.noSignal": "{{value.noSignal}}"
-          "groups.{{value.id}}.showing": "{{value.showing}}"
-      - jsonPath: $.scenes
-        set: { sceneList: "{{value}}" }
-      - jsonPath: $.layouts
-        set: { layoutList: "{{value}}" }
-      - jsonPath: $.layout.name
-        set: { layout: "{{value}}" }
-      - jsonPath: $.ndi.streams
-        set: { streams: "{{value}}" }
-      - jsonPath: $.endpoints
-        set: { endpointList: "{{value}}" }
-      - jsonPath: "$.endpoints[*]"
-        set:
-          "endpoints.{{value.id}}.online": "{{value.online}}"
-          "endpoints.{{value.id}}.displaysOk": "{{value.displaysOk}}"
-          "endpoints.{{value.id}}.displays": "{{value.displays}}"
+    parse: *control
 
   # Sound outputs: their settings from the layout, their health from /api/audio.
   - every: 5
@@ -210,6 +379,18 @@ polls:
       - jsonPath: "$.outputs[*]"
         set: { "audio.{{value.id}}.problem": "{{value.error | default:@value.sourceError}}" }
 
+  # Every canvas the media server runs, and whether each is running.
+  - every: 15
+    steps: [{ http: { method: GET, path: "/api/canvases" } }]
+    parse:
+      - jsonPath: $.canvases
+        set: { canvasList: "{{value}}" }
+      - jsonPath: "$.canvases[*]"
+        set:
+          "canvases.{{value.id}}.name": "{{value.name}}"
+          "canvases.{{value.id}}.running": "{{value.running}}"
+          "canvases.{{value.id}}.error": "{{value.error}}"
+
 capabilities:
   layoutPresets: { recall: recall_preset, param: preset, optionsFrom: state.groupList }
 
@@ -220,11 +401,28 @@ controls:
     controls:
       - { type: presets, label: Presets, command: recall_preset, param: preset, params: { group: "{{item.id}}" }, options: item.presets, state: "groups.{{item.id}}.activePreset" }
       - { type: select, label: Show one stream, command: show_stream, param: ndiName, params: { group: "{{item.id}}" }, options: state.streams, state: "groups.{{item.id}}.stream" }
+      # Split screens: pick how the wall is divided, then what each part plays.
+      - { type: presets, label: Split, command: arrange, param: arrangement, params: { group: "{{item.id}}" }, options: item.arrangements, state: "groups.{{item.id}}.arrangement" }
+      - type: group
+        repeat: item.slots
+        label: "{{item.name}}"
+        controls:
+          - { type: select, label: Stream, command: slot_stream, param: ndiName, params: { group: "{{parent.id}}", slot: "{{item.slot}}" }, options: state.streams, state: item.ndiName }
+          - { type: select, label: Playlist, command: slot_playlist, param: playlist, params: { group: "{{parent.id}}", slot: "{{item.slot}}" }, options: state.playlists, state: item.playlist, when: state.playlists }
+      - { type: toggle, label: Content, command: content, param: "on", params: { group: "{{item.id}}" }, state: "groups.{{item.id}}.on", when: item.arrangements }
       - { type: status, label: On screen, state: "groups.{{item.id}}.showing" }
       - { type: status, label: No signal from, state: "groups.{{item.id}}.noSignal" }
       - { type: button, label: Blank this wall, command: clear, params: { group: "{{item.id}}" } }
       - { type: button, label: Restart videos, command: restart_videos, params: { group: "{{item.id}}" } }
   - { type: presets, label: Scenes (all walls), command: recall_scene, param: scene, options: state.sceneList }
+  - type: group
+    label: Background (under every wall)
+    when: background.signal
+    controls:
+      - { type: toggle, label: Background, command: background_on, param: "on", state: background.on }
+      - { type: select, label: Stream, command: background_stream, param: ndiName, options: state.streams, state: background.ndiName }
+      - { type: select, label: Playlist, command: background_playlist, param: playlist, options: state.playlists, state: background.playlist, when: state.playlists }
+      - { type: status, label: Signal, state: background.signal }
   - type: group
     repeat: state.audioOutputs
     label: "{{item.name}} (sound)"
@@ -243,11 +441,26 @@ simulator:
         name: Main wall
         activePreset: camera-1-full
         presets: [{ id: camera-1-full, name: Camera 1 full }, { id: camera-slides, name: Camera + slides }, { id: quad, name: Quad }]
+        "on": true
+        arrangement: two
+        arrangements: [{ id: full, name: One stream, slots: 1 }, { id: two, name: Two side by side, slots: 2 }, { id: quad, name: Four, slots: 4 }]
+        slots:
+          - { slot: 1, name: Left, ndiName: "ZOWIEBOXPRO-54447 (ZowieBox-54447)", playlist: "", video: "", signal: ok }
+          - { slot: 2, name: Right, ndiName: "", playlist: Game day, video: "", signal: ok }
       - id: double-wide
         name: Double wide
         activePreset: ""
         presets: [{ id: slides-full, name: Slides full }]
     "groups.main-wall.activePreset": camera-1-full
+    "groups.main-wall.on": true
+    "groups.main-wall.arrangement": two
+    "groups.main-wall.arrangements": [{ id: full, name: One stream, slots: 1 }, { id: two, name: Two side by side, slots: 2 }, { id: quad, name: Four, slots: 4 }]
+    playlists: [{ id: Game day, name: Game day, videos: 2 }]
+    "background.on": false
+    "background.ndiName": ""
+    "background.playlist": Game day
+    "background.signal": ok
+    canvasList: [{ id: canvas-1, name: Inside bar, running: true }, { id: canvas-2, name: Bar tower, running: true }]
     "groups.main-wall.presets": [{ id: camera-1-full, name: Camera 1 full }, { id: camera-slides, name: Camera + slides }, { id: quad, name: Quad }]
     "groups.double-wide.activePreset": ""
     "groups.double-wide.presets": [{ id: slides-full, name: Slides full }]

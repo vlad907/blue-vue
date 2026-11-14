@@ -11,6 +11,7 @@ interface Props {
   profile: UiProfile;
   controls: Control[];
   item?: unknown; // the current item inside a repeated group
+  parent?: unknown; // the item of the group around that one (a wall, around its slots)
 }
 
 interface Option {
@@ -18,20 +19,20 @@ interface Option {
   label: string;
 }
 
-export function Controls({ device, profile, controls, item }: Props) {
+export function Controls({ device, profile, controls, item, parent }: Props) {
   return (
     <div className="controls">
       {controls.map((c, i) => (
-        <ControlView key={i} device={device} profile={profile} control={c} item={item} />
+        <ControlView key={i} device={device} profile={profile} control={c} item={item} parent={parent} />
       ))}
     </div>
   );
 }
 
-function ControlView({ device, profile, control: c, item }: { device: UiDevice; profile: UiProfile; control: Control; item?: unknown }) {
+function ControlView({ device, profile, control: c, item, parent }: { device: UiDevice; profile: UiProfile; control: Control; item?: unknown; parent?: unknown }) {
   const { ui, state, act } = useApp();
   const deviceState = state.devices[device.id]?.state ?? {};
-  const ctx = { settings: device.settings, item, device, state: deviceState };
+  const ctx = { settings: device.settings, item, parent, device, state: deviceState };
   const value = c.state ? resolve(render(c.state, ctx), ctx) : undefined;
   const label = render(c.label, ctx);
   const baseParams = renderParams(c.params, ctx);
@@ -42,6 +43,8 @@ function ControlView({ device, profile, control: c, item }: { device: UiDevice; 
   };
   const coerce = (v: unknown) => (param?.type === "integer" || param?.type === "number" ? Number(v) : v);
 
+  if (c.when && isBlank(resolve(render(c.when, ctx), ctx))) return null;
+
   switch (c.type) {
     case "group": {
       const list = c.repeat ? resolve(c.repeat, ctx) : [undefined];
@@ -50,8 +53,8 @@ function ControlView({ device, profile, control: c, item }: { device: UiDevice; 
         <>
           {list.map((it, i) => (
             <div className="control-group" key={i}>
-              <h4>{render(c.label, { ...ctx, item: it })}</h4>
-              <Controls device={device} profile={profile} controls={c.controls ?? []} item={it} />
+              <h4>{render(c.label, c.repeat ? { ...ctx, item: it, parent: item } : ctx)}</h4>
+              <Controls device={device} profile={profile} controls={c.controls ?? []} item={c.repeat ? it : item} parent={c.repeat ? item : parent} />
             </div>
           ))}
         </>
@@ -100,11 +103,13 @@ function ControlView({ device, profile, control: c, item }: { device: UiDevice; 
 
     case "select": {
       const options = optionsFor(c, param, { ...ctx, ...baseParams }, ui.channels);
+      // Nothing chosen (or something the list doesn't offer) reads as "—", not as the first choice.
+      const chosen = value !== undefined && options.some((o) => String(o.value) === String(value)) ? String(value) : "";
       return (
         <label className="field">
           <span>{label}</span>
-          <select value={value === undefined ? "" : String(value)} onChange={(e) => run(c.command, { [c.param!]: coerce(e.target.value) })}>
-            {value === undefined && <option value="">—</option>}
+          <select value={chosen} onChange={(e) => e.target.value !== "" && run(c.command, { [c.param!]: coerce(e.target.value) })}>
+            {chosen === "" && <option value="">—</option>}
             {options.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
@@ -148,10 +153,14 @@ function ControlView({ device, profile, control: c, item }: { device: UiDevice; 
  * "groups.main-wall.activePreset", or "state.streams"), or a path into the
  * settings or the repeated item ("settings.zones", "item.presets").
  */
+function isBlank(v: unknown) {
+  return v === undefined || v === null || v === "" || (Array.isArray(v) && !v.length);
+}
+
 function resolve(path: string, ctx: Record<string, unknown>): unknown {
   const state = ctx.state as Record<string, unknown>;
   if (path.startsWith("state.")) return state[path.slice(6)];
-  if (/^(settings|item|device)\./.test(path)) return lookup(ctx, path);
+  if (/^(settings|item|parent|device)\./.test(path)) return lookup(ctx, path);
   return state[path] ?? lookup(ctx, path);
 }
 

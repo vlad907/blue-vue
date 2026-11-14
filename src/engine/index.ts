@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { identityStore } from "../../agent/src/transports/androidtv/cert.ts";
+import { appleTvStore } from "../../agent/src/transports/appletv/helper.ts";
 import type { StateStore } from "../state.ts";
 import { AgentHub } from "./agents.ts";
 import { DeviceManager } from "./device-manager.ts";
@@ -29,6 +30,7 @@ export interface Engine {
 export function startEngine(dataDir: string, state: StateStore, simulate: boolean): Engine {
   // The Android TV remote certificate for TVs reached from the server.
   identityStore.dir = dataDir;
+  appleTvStore.dir = dataDir; // Apple TV pairing credentials
   const store = new SiteStore(dataDir);
   const profiles = new ProfileLibrary(BUILTIN_PROFILES, join(dataDir, "profiles")).load();
   let site = store.load();

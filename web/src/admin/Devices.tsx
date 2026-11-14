@@ -3,6 +3,7 @@ import { adminApi, slugify, type LogEntry, type Site, type SiteDevice } from "./
 import { useDraft } from "./draft.tsx";
 import { Check, Field, ParamsForm, Pick, SettingsForm, Text, defaultSettings } from "./forms.tsx";
 import { useLive } from "./live.tsx";
+import { AddMosaic } from "./Mosaic.tsx";
 import { AddTvs, PairControls, usePairing } from "./Tvs.tsx";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -24,6 +25,7 @@ export function Devices() {
   const state = useLive();
   const [editing, setEditing] = useState<string | null>(null); // device id, or "" for a new one
   const [addingTvs, setAddingTvs] = useState(false);
+  const [addingMosaic, setAddingMosaic] = useState(false);
   const [testing, setTesting] = useState<string>();
   // Ticked rows, for removing or placing many devices at once.
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -65,8 +67,9 @@ export function Devices() {
         <div className="row-between">
           <h2>Devices</h2>
           <span className="row-tight">
-            <button className="btn" onClick={() => { setEditing(null); setTesting(undefined); setAddingTvs(true); }}>+ Add TVs</button>
-            <button className="btn primary" onClick={() => { setAddingTvs(false); setEditing(""); }}>+ Add device</button>
+            <button className="btn" onClick={() => { setEditing(null); setTesting(undefined); setAddingMosaic(false); setAddingTvs(true); }}>+ Add TVs</button>
+            <button className="btn" onClick={() => { setEditing(null); setTesting(undefined); setAddingTvs(false); setAddingMosaic(true); }}>+ Add mosaic engine</button>
+            <button className="btn primary" onClick={() => { setAddingTvs(false); setAddingMosaic(false); setEditing(""); }}>+ Add device</button>
           </span>
         </div>
         <div className="row-tight">
@@ -111,7 +114,7 @@ export function Devices() {
                   <td><span className={`pill ${cls}`} title={status}>{status.length > 28 ? status.slice(0, 28) + "…" : status}</span></td>
                   <td className="actions">
                     <button className="btn small" onClick={() => setEditing(d.id)}>Edit</button>
-                    <button className="btn small" disabled={!live || live.problem !== undefined} onClick={() => { setAddingTvs(false); setTesting(testing === d.id ? undefined : d.id); }}>Test</button>
+                    <button className="btn small" disabled={!live || live.problem !== undefined} onClick={() => { setAddingTvs(false); setAddingMosaic(false); setTesting(testing === d.id ? undefined : d.id); }}>Test</button>
                   </td>
                 </tr>
               );
@@ -123,6 +126,7 @@ export function Devices() {
       </div>
 
       {addingTvs && editing === null && <AddTvs onClose={() => setAddingTvs(false)} />}
+      {addingMosaic && editing === null && <AddMosaic onClose={() => setAddingMosaic(false)} />}
       {editing !== null && (
         <DeviceEditor
           key={editing}
@@ -138,7 +142,7 @@ export function Devices() {
           onDelete={(id) => update((s) => removeDevices(s, [id]))}
         />
       )}
-      {testing && editing === null && !addingTvs && <DeviceConsole id={testing} unsaved={dirty} onClose={() => setTesting(undefined)} />}
+      {testing && editing === null && !addingTvs && !addingMosaic && <DeviceConsole id={testing} unsaved={dirty} onClose={() => setTesting(undefined)} />}
     </div>
   );
 }
@@ -266,7 +270,7 @@ function DeviceConsole({ id, unsaved, onClose }: { id: string; unsaved: boolean;
         {live?.error && <span className="muted">{live.error}</span>}
       </div>
 
-      {profile?.transport.type === "androidtv" && <PairPanel id={id} unsaved={unsaved} paired={live?.online === true} />}
+      {(profile?.transport.type === "androidtv" || profile?.transport.type === "appletv") && <PairPanel id={id} unsaved={unsaved} paired={live?.online === true} appleTv={profile.transport.type === "appletv"} />}
 
       <h3 className="section">Send a command</h3>
       <div className="aform">
@@ -305,9 +309,9 @@ function DeviceConsole({ id, unsaved, onClose }: { id: string; unsaved: boolean;
  * Pairs an Android / Google TV: the TV shows a code, the technician types it
  * in. Only needed once per TV (and again if the TV is reset).
  */
-function PairPanel({ id, unsaved, paired }: { id: string; unsaved: boolean; paired: boolean }) {
+function PairPanel({ id, unsaved, paired, appleTv }: { id: string; unsaved: boolean; paired: boolean; appleTv: boolean }) {
   const { notice } = useDraft();
-  const p = usePairing(id, () => notice("Paired. The TV connects within a few seconds."));
+  const p = usePairing(id, () => notice("Paired. The TV connects within a few seconds."), appleTv);
   return (
     <>
       <h3 className="section">Pairing</h3>
@@ -315,6 +319,7 @@ function PairPanel({ id, unsaved, paired }: { id: string; unsaved: boolean; pair
       {unsaved && <p className="help">Save & apply first if you just changed this device's IP address.</p>}
       <PairControls p={p} startLabel="Pair with this TV" />
       {p.error && <p className="bad-text">{p.error}</p>}
+      {p.note && !p.error && <p className="help">{p.note}</p>}
     </>
   );
 }

@@ -222,6 +222,12 @@ export class AgentHub {
     await this.request(agent, (reqId) => ({ type: "atv.pair", reqId, host, step, code }), 20_000);
   }
 
+  /** One Apple TV pairing step, run by the agent's Apple TV helper. */
+  async pairAppleTv(agent: string, host: string, step: "start" | "finish" | "cancel", code?: string): Promise<{ done: boolean; more?: boolean; message?: string }> {
+    if (this.simulate) return { done: step !== "start" };
+    return JSON.parse((await this.request(agent, (reqId) => ({ type: "atv.pair", reqId, host, step, code, kind: "appletv" }), 35_000)) ?? '{"done":true}');
+  }
+
   /** Looks for TVs of one kind (Google TV, Roku, ADB) on the agent's network. */
   async scanTvs(agent: string, kind: ScanKind, subnets?: string[]): Promise<FoundTv[]> {
     if (this.simulate) return simulatedTvs(kind);

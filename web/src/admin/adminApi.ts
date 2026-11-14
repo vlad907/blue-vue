@@ -60,6 +60,15 @@ export interface FoundTv {
   existing?: string; // id of the saved device already using this address
 }
 
+export interface MosaicCanvas {
+  id: string;
+  name: string;
+  running: boolean;
+  error: string;
+  walls: { id: string; name: string; presets: number }[];
+  existing?: string; // the saved device already on this canvas
+}
+
 export interface SettingField {
   key: string;
   label: string;
@@ -79,7 +88,7 @@ export interface Profile {
   category: string;
   description?: string;
   transport: { type: string };
-  discover?: "androidtv" | "roku" | "adb";
+  discover?: "androidtv" | "roku" | "adb" | "appletv";
   settings: SettingField[];
   commands: Record<string, { label?: string; params: Record<string, Param>; hidden?: boolean }>;
   state: Record<string, { type: string; label?: string }>;
@@ -152,9 +161,10 @@ export const adminApi = {
   parseTest: (rules: unknown[], sample: string, settings: Record<string, unknown> = {}) =>
     call<{ updates?: Record<string, unknown>; problems: string[] }>("POST", "/api/admin/profiles/parse-test", { rules, sample, settings }),
   pair: (id: string, step: "start" | "finish" | "cancel", code?: string) =>
-    call<{ ok: boolean; simulated: boolean }>("POST", `/api/admin/devices/${encodeURIComponent(id)}/pair`, { step, code }),
+    call<{ ok: boolean; simulated: boolean; done?: boolean; more?: boolean; message?: string }>("POST", `/api/admin/devices/${encodeURIComponent(id)}/pair`, { step, code }),
   discoverTvs: (location: string, kind: string, subnet?: string) =>
     call<{ found: FoundTv[]; subnets: string[]; simulated: boolean }>("POST", "/api/admin/discover/tvs", { location, kind, subnet }),
+  mosaicCanvases: (host: string, port: number) => call<{ canvases: MosaicCanvas[]; simulated: boolean }>("POST", "/api/admin/mosaic/canvases", { host, port }),
   network: () => call<NetworkInfo>("GET", "/api/admin/network"),
   setNetwork: (interfaces: string[], force = false) => call<{ status: ListenStatus }>("PUT", "/api/admin/network", { interfaces, force }),
   learnIr: (location: string, irHost: string) => call<{ pronto: string }>("POST", "/api/admin/ir/learn", { location, irHost }),

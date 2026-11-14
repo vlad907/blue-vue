@@ -1,15 +1,18 @@
 // Builds the Windows server package: one bundled JS file, the web panel,
-// built-in profiles, a private Node runtime and the service installer, zipped.
+// built-in profiles, a private Node runtime, a private Python with pyatv (for
+// Apple TV control) and the service installer, zipped.
 //
 //   npm run package:server            -> release/BlueVue-Server-<version>-win-x64.zip
 //   NODE_VERSION=v24.11.1 npm run package:server   (pin a Node version)
 //
 // The Node runtime comes from nodejs.org and is checked against its published
-// SHA-256 before use.
+// SHA-256 before use. Python comes from python.org and is checked against the
+// SHA-256 pinned below; pyatv and what it needs come from PyPI as Windows
+// wheels (needs python3 with pip on the build machine).
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { build } from "esbuild";
 
@@ -19,6 +22,13 @@ const OUT = join(ROOT, "release");
 const NAME = "BlueVue-Server";
 const STAGE = join(OUT, NAME);
 const CACHE = join(OUT, ".cache");
+
+// The Python that runs the Apple TV helper. To move to a newer one, change all three.
+const PYTHON_VERSION = "3.13.9";
+const PYTHON_SHA256 = "91d828c2da3a029b41699e918674a0cb379c02cf20dab9c501306885f837402a";
+// srptools 2 changed a call pyatv 0.18 makes, which breaks pairing; keep it on 1.x until pyatv follows.
+const PYATV = "pyatv==0.18.0";
+const PYATV_PINS = ["srptools==1.0.1"];
 
 async function main() {
   rmSync(STAGE, { recursive: true, force: true });
@@ -60,6 +70,10 @@ async function main() {
   cpSync(node.exe, join(STAGE, "runtime/node.exe"));
   writeFileSync(join(STAGE, "runtime/VERSION.txt"), `Node.js ${node.version} (win-x64), from nodejs.org\n`);
 
+  await addPython(join(STAGE, "runtime/python"));
+  mkdirSync(join(STAGE, "app/appletv"), { recursive: true });
+  cpSync(join(ROOT, "agent/src/transports/appletv/bluevue_atv.py"), join(STAGE, "app/appletv/bluevue_atv.py"));
+
   const zip = join(OUT, `${NAME}-${pkg.version}-win-x64.zip`);
   rmSync(zip, { force: true });
   execFileSync("zip", ["-qr", zip, NAME], { cwd: OUT });
@@ -92,6 +106,48 @@ async function fetchNode(): Promise<{ exe: string; version: string }> {
   writeFileSync(zipPath, data);
   execFileSync("unzip", ["-qo", zipPath, `${base}/node.exe`, "-d", CACHE]);
   return { exe, version };
+}
+
+/**
+ * Puts Windows Python and pyatv in `dir`: python.org's embeddable package,
+ * with the wheels unpacked into Lib/site-packages. Nothing is installed on
+ * the server; the helper runs this copy directly.
+ */
+async function addPython(dir: string) {
+  const base = `python-${PYTHON_VERSION}-embed-amd64`;
+  const zipPath = join(CACHE, `${base}.zip`);
+  if (!existsSync(zipPath)) {
+    console.log(`Downloading Python ${PYTHON_VERSION} for Windows…`);
+    const res = await fetch(`https://www.python.org/ftp/python/${PYTHON_VERSION}/${base}.zip`);
+    if (!res.ok) throw new Error(`Download failed: HTTP ${res.status}`);
+    writeFileSync(zipPath, Buffer.from(await res.arrayBuffer()));
+  }
+  const actual = createHash("sha256").update(readFileSync(zipPath)).digest("hex");
+  if (actual !== PYTHON_SHA256) {
+    rmSync(zipPath);
+    throw new Error(`Checksum mismatch for ${base}.zip`);
+  }
+  mkdirSync(dir, { recursive: true });
+  execFileSync("unzip", ["-qo", zipPath, "-d", dir]);
+
+  const wheels = join(CACHE, `wheels-${[PYATV, ...PYATV_PINS].join("-")}-py${PYTHON_VERSION}`);
+  if (!existsSync(wheels)) {
+    console.log(`Downloading ${PYATV} for Windows…`);
+    const [major, minor] = PYTHON_VERSION.split(".");
+    try {
+      execFileSync(process.env.PYTHON ?? "python3", ["-m", "pip", "download", "--quiet", "--disable-pip-version-check", PYATV, ...PYATV_PINS, "--platform", "win_amd64", "--python-version", `${major}.${minor}`, "--implementation", "cp", "--only-binary=:all:", "-d", wheels], { stdio: "inherit" });
+    } catch (err) {
+      rmSync(wheels, { recursive: true, force: true });
+      throw new Error(`Couldn't download pyatv. The build needs python3 with pip (set PYTHON to choose one). ${(err as Error).message}`);
+    }
+  }
+  const site = join(dir, "Lib/site-packages");
+  mkdirSync(site, { recursive: true });
+  for (const wheel of readdirSync(wheels).filter((f) => f.endsWith(".whl"))) execFileSync("unzip", ["-qo", join(wheels, wheel), "-d", site]);
+  // The embeddable Python only looks where this file says.
+  const [major, minor] = PYTHON_VERSION.split(".");
+  writeFileSync(join(dir, `python${major}${minor}._pth`), `python${major}${minor}.zip\r\n.\r\nLib\\site-packages\r\n`);
+  writeFileSync(join(dir, "VERSION.txt"), `Python ${PYTHON_VERSION} (embeddable, win-amd64) from python.org, with ${[PYATV, ...PYATV_PINS].join(", ")} from PyPI\n`);
 }
 
 await main();

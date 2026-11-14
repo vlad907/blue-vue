@@ -121,6 +121,11 @@ export class AgentLink {
         break;
       case "atv.pair":
         try {
+          if (msg.kind === "appletv") {
+            const { pairAppleTv } = await import("./transports/appletv/helper.ts");
+            this.send({ type: "reply", reqId: msg.reqId, ok: true, text: JSON.stringify(await pairAppleTv(msg.host, msg.step, msg.code, this.opts.simulate)) });
+            break;
+          }
           await pairStep(msg.host, msg.step, msg.code, this.opts.simulate);
           this.send({ type: "reply", reqId: msg.reqId, ok: true });
         } catch (err) {

@@ -85,7 +85,12 @@ export class DeviceManager {
     this.runtimes.set(device.id, rt);
     this.state.update((s) => void (s.devices[device.id] = { ...base, state: { ...rt.state } }));
     rt.on("state", (changed) => this.state.update((s) => Object.assign(s.devices[device.id].state, changed)));
-    rt.on("status", (online: boolean) => this.state.update((s) => void (s.devices[device.id].online = online)));
+    rt.on("status", (online: boolean) =>
+      this.state.update((s) => {
+        s.devices[device.id].online = online;
+        if (online) delete s.devices[device.id].error; // what kept it offline is over
+      }),
+    );
     rt.on("log", (entry) => {
       if (entry.dir === "error") this.state.update((s) => void (s.devices[device.id].error = entry.text));
     });

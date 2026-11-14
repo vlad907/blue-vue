@@ -179,6 +179,16 @@ export class DeviceRuntime extends EventEmitter {
       if (a.appLink !== undefined) return { kind: "androidtv", appLink: render(a.appLink, ctx) };
       return { kind: "androidtv", key: typeof a.key === "number" ? a.key : render(String(a.key), ctx) };
     }
+    if (step.appletv) {
+      const a = step.appletv;
+      if (a.power !== undefined) {
+        const power = render(a.power, ctx).toLowerCase();
+        if (power !== "on" && power !== "off") throw new Error(`appletv power must be "on" or "off", not "${power}"`);
+        return { kind: "appletv", power };
+      }
+      if (a.app !== undefined) return { kind: "appletv", app: render(a.app, ctx) };
+      return { kind: "appletv", key: render(String(a.key), ctx).toLowerCase() };
+    }
     return { kind: "wol" };
   }
 

@@ -24,7 +24,7 @@ export function parseAddresses(text: string): { hosts: string[]; bad: string[] }
 }
 
 const rank = (p: { discover?: string }) => (p.discover === "androidtv" ? 2 : p.discover ? 1 : 0);
-const KIND_LABEL: Record<string, string> = { androidtv: "Google TV", roku: "Roku TV", adb: "Fire TV / Android with network debugging on" };
+const KIND_LABEL: Record<string, string> = { appletv: "Apple TV", androidtv: "Google TV", roku: "Roku TV", adb: "Fire TV / Android with network debugging on" };
 
 export function AddTvs({ onClose }: { onClose: () => void }) {
   const { site, update, profiles, notice } = useDraft();
@@ -98,7 +98,7 @@ export function AddTvs({ onClose }: { onClose: () => void }) {
       }
       return s;
     });
-    const next = prof.transport.type === "androidtv" ? ", then pair them on the TV pairing page" : prof.transport.type === "adb" ? `, then press Allow on each TV's "Allow debugging" prompt` : "";
+    const next = ["androidtv", "appletv"].includes(prof.transport.type) ? ", then pair them on the TV pairing page" : prof.transport.type === "adb" ? `, then press Allow on each TV's "Allow debugging" prompt` : "";
     notice(`Added ${chosen.length} TVs. Press Save & apply${next}.`);
     onClose();
   };
@@ -219,11 +219,12 @@ export function AddTvs({ onClose }: { onClose: () => void }) {
 
 type Phase = "idle" | "starting" | "code" | "sending";
 
-/** Pair-with-code flow for one saved device. */
-export function usePairing(id: string, onPaired?: () => void) {
+/** Pair-with-code flow for one saved device. An Apple TV's code is 4 digits and it asks for two in a row. */
+export function usePairing(id: string, onPaired?: () => void, appleTv = false) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string>();
+  const [note, setNote] = useState<string>();
   const step = async (fn: () => Promise<unknown>, busy: Phase, ok: Phase, failed: Phase) => {
     setError(undefined);
     setPhase(busy);
@@ -238,19 +239,33 @@ export function usePairing(id: string, onPaired?: () => void) {
     }
   };
   return {
-    phase, code, setCode, error,
-    start: () => step(() => adminApi.pair(id, "start"), "starting", "code", "idle"),
-    finish: async () => {
-      if (await step(() => adminApi.pair(id, "finish", code), "sending", "idle", "code")) {
-        setCode("");
+    phase, code, setCode, error, note,
+    length: appleTv ? 4 : 6,
+    start: async () => {
+      setNote(undefined);
+      let done = false;
+      // An Apple TV that's already paired has no code to show.
+      if (await step(async () => { done = (await adminApi.pair(id, "start")).done === true && appleTv; }, "starting", "code", "idle") && done) {
+        setPhase("idle");
         onPaired?.();
       }
+    },
+    finish: async () => {
+      let more = false;
+      let message: string | undefined;
+      if (await step(async () => { const r = await adminApi.pair(id, "finish", code); more = r.more === true; message = r.message; }, "sending", "idle", appleTv ? "idle" : "code")) {
+        setCode("");
+        setNote(message);
+        if (more) setPhase("code"); // the second code is on screen now
+        else onPaired?.();
+      } else if (appleTv) setCode(""); // a refused code ends that pairing on the Apple TV: back to the Pair button
     },
     cancel: () => {
       void adminApi.pair(id, "cancel").catch(() => {});
       setPhase("idle");
       setCode("");
       setError(undefined);
+      setNote(undefined);
     },
   };
 }
@@ -266,8 +281,8 @@ export function PairControls({ p, startLabel = "Pair" }: { p: ReturnType<typeof 
   }
   return (
     <form className="row-tight pair-code" onSubmit={(e) => { e.preventDefault(); void p.finish(); }}>
-      <input className="mono" type="text" maxLength={6} autoFocus placeholder="Code on TV" value={p.code} onChange={(e) => p.setCode(e.target.value.toUpperCase())} />
-      <button className="btn small primary" type="submit" disabled={p.code.length !== 6 || p.phase === "sending"}>{p.phase === "sending" ? "Pairing…" : "Pair"}</button>
+      <input className="mono" type="text" maxLength={p.length} autoFocus placeholder="Code on TV" value={p.code} onChange={(e) => p.setCode(e.target.value.toUpperCase())} />
+      <button className="btn small primary" type="submit" disabled={p.code.length !== p.length || p.phase === "sending"}>{p.phase === "sending" ? "Pairing…" : "Pair"}</button>
       <button className="btn small" type="button" onClick={p.cancel}>Cancel</button>
     </form>
   );
@@ -277,7 +292,7 @@ export function PairControls({ p, startLabel = "Pair" }: { p: ReturnType<typeof 
 export function Pairing() {
   const { site, profiles, dirty } = useDraft();
   const live = useLive();
-  const tvs = site.devices.filter((d) => ["androidtv", "adb"].includes(profiles[d.profile]?.transport.type ?? ""));
+  const tvs = site.devices.filter((d) => ["androidtv", "adb", "appletv"].includes(profiles[d.profile]?.transport.type ?? ""));
   const wallOf = (id: string) => site.groups.find((g) => g.kind === "wall" && g.devices.includes(id))?.name;
   const connected = tvs.filter((d) => live?.devices[d.id]?.online).length;
 
@@ -285,7 +300,8 @@ export function Pairing() {
     <div>
       <h2>TV pairing</h2>
       <p className="help">
-        Each Google TV pairs once: press Pair, read the 6-character code off that TV and type it in. Fire TVs and other ADB devices ask on
+        Each Google TV pairs once: press Pair, read the 6-character code off that TV and type it in. An Apple TV shows a 4-digit code,
+        then a second one: type in both. Fire TVs and other ADB devices ask on
         their own screen instead: tick “Always allow” and press Allow. A TV that's connected is paired.
         {dirty && " Save & apply first so newly added TVs appear here as live."}
       </p>
@@ -298,7 +314,7 @@ export function Pairing() {
           {tvs.map((d) => <PairRow key={d.id} device={d} wall={wallOf(d.id)} />)}
         </tbody>
       </table>
-      {!tvs.length && <p className="empty">No Google TVs or Fire TVs yet. Add them on the Devices page with + Add TVs.</p>}
+      {!tvs.length && <p className="empty">No Google TVs, Apple TVs or Fire TVs yet. Add them on the Devices page with + Add TVs.</p>}
     </div>
   );
 }
@@ -308,7 +324,7 @@ function PairRow({ device: d, wall }: { device: SiteDevice; wall?: string }) {
   const { notice, profiles } = useDraft();
   const adb = profiles[d.profile]?.transport.type === "adb";
   const view = live?.devices[d.id];
-  const p = usePairing(d.id, () => notice(`${d.name} paired`));
+  const p = usePairing(d.id, () => notice(`${d.name} paired`), profiles[d.profile]?.transport.type === "appletv");
   const status = !view ? "not saved yet" : view.online ? "connected" : view.error ?? "offline";
   return (
     <tr>
@@ -318,6 +334,7 @@ function PairRow({ device: d, wall }: { device: SiteDevice; wall?: string }) {
       <td>
         <span className={`pill ${!view ? "" : view.online ? "ok" : "warn"}`} title={status}>{status.length > 40 ? status.slice(0, 40) + "…" : status}</span>
         {p.error && <div className="bad-text">{p.error}</div>}
+        {p.note && !p.error && <div className="help">{p.note}</div>}
       </td>
       <td className="actions">
         {view && !adb && <PairControls p={p} startLabel={view.online ? "Pair again" : "Pair"} />}

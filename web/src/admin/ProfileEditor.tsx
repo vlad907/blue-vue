@@ -163,6 +163,7 @@ function GeneralTab({ p, update, isNew }: { p: RawProfile; update: (fn: (p: RawP
               { value: "serial", label: "RS-232 / serial (on a wall PC)" },
               { value: "ir", label: "IR through a Global Caché iTach" },
               { value: "androidtv", label: "Android / Google TV remote (pairing code)" },
+              { value: "appletv", label: "Apple TV (pairing code)" },
               { value: "adb", label: "Android TV (ADB)" },
               { value: "wol", label: "Wake-on-LAN only" },
             ]}

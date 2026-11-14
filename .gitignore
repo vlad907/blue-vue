@@ -4,9 +4,12 @@ config/system.local.json
 data/
 androidtv-remote.pem
 adbkey.pem
+appletv-credentials.json
+__pycache__/
 .DS_Store
 logs/
 run-server.cmd
 web/dist/
 release/
 desktop/node_modules/
+.venv/

@@ -36,10 +36,10 @@ id: acme-projector            # lowercase letters, numbers, dashes
 name: Acme Projector
 manufacturer: Acme
 category: projector           # display, tuner, audio, video-wall, switcher, projector, lighting, other
-discover: roku                # optional: lets "+ Add TVs" find these on the network (androidtv, roku or adb)
+discover: roku                # optional: lets "+ Add TVs" find these on the network (androidtv, roku, adb or appletv)
 
 transport:
-  type: tcp                   # tcp, udp, http, serial, ir, adb, wol, androidtv
+  type: tcp                   # tcp, udp, http, serial, ir, adb, wol, androidtv, appletv
   port: 4352
   terminator: "\r"            # added to every `send`
   delimiter: "\r"             # splits replies into messages (default "\n")
@@ -88,6 +88,7 @@ A command is a list of steps, run in order.
 | Android TV remote: key | `androidtv: { key: HOME }`. Names come from Android's `KEYCODE_*` list (`DPAD_UP`, `TV_INPUT_HDMI_{{input \| digits}}`), or use a number |
 | Android TV remote: power | `androidtv: { power: "on" }`. Presses POWER only if the TV reports the other state, and replies with what the TV reported |
 | Android TV remote: app link | `androidtv: { appLink: "https://www.youtube.com" }` |
+| Apple TV: key, power, app | `appletv: { key: select }` (`up`, `down`, `left`, `right`, `select`, `menu`, `home`, `play_pause`, ...), `appletv: { power: "on" }`, `appletv: { app: "com.netflix.Netflix" }` |
 | Wait | `delay: 500`, or `delay: "{{settings.delayMs}}"` |
 | Each character | `forEachChar: "{{channel}}"` with nested `steps`, using `{{item}}` |
 | Each list item | `forEach: settings.zones` with nested `steps`, using `{{item.index}}` |
@@ -123,6 +124,9 @@ An argument starting with `@` is read from the context instead of written litera
 - `jsonPath: $.status.inputs[0].name` reads a value from JSON.
 
 The `set` keys are templates too, so one rule can fill per-zone state: `"zones.{{zone}}.gain": "{{val}}"`. Declare state types under `state:`. Keys can use `*`, e.g. `"zones.*.mute": { type: boolean }`.
+
+## Controls
+Controls are listed under `controls:`. A `group` with `repeat: state.someList` draws its controls once per item, with `{{item.…}}` for that item. A group inside it can repeat a list of the item (`repeat: item.slots`); there, `{{parent.…}}` is the outer item. Any control can have `when: <state key or list>`: it is shown only while that value has something in it, so a control for a feature the device doesn't report stays hidden. `mosaic-engine.yaml` uses all three.
 
 ## Capabilities
 Capabilities connect your commands to features the rest of the system uses:

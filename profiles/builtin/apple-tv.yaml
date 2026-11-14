@@ -1,0 +1,116 @@
+id: apple-tv
+name: Apple TV
+manufacturer: Apple
+model: Apple TV 4K and Apple TV HD (tvOS 15 or newer)
+category: display
+description: >
+  Network control of an Apple TV box: remote keys, real power on and off,
+  opening apps, and what's playing. It uses the same protocols as the iPhone's
+  remote (through the open-source pyatv library), so nothing is installed on
+  the Apple TV. After saving the device, pair it on the TV pairing page: the
+  Apple TV shows a 4-digit code, then a second one, and both are typed in.
+  On the Apple TV, Settings > AirPlay and HomeKit > Allow Access must be
+  "Anyone on the Same Network", and the Apple TV should have a fixed IP
+  address. Power here is the Apple TV's own sleep and wake; the TV it's
+  plugged into follows only if the Apple TV is set to control it
+  (Settings > Remotes and Devices > Control TVs and Receivers). A tvOS update
+  can make an Apple TV forget pairing: pair it again if it shows as not paired.
+
+discover: appletv
+
+transport:
+  type: appletv
+  minGapMs: 100
+
+settings:
+  - { key: host, label: IP address, type: string, required: true }
+  - { key: mac, label: MAC address, type: string, help: "Optional. For your own records" }
+
+commands:
+  power_on:
+    label: Wake
+    steps: [{ appletv: { power: "on" } }]
+  power_off:
+    label: Sleep
+    steps: [{ appletv: { power: "off" } }]
+  key:
+    label: Press a remote key
+    params:
+      key:
+        type: enum
+        label: Key
+        values: [up, down, left, right, select, menu, home, home_hold, top_menu, play_pause, play, pause, stop, next, previous, skip_forward, skip_backward, volume_up, volume_down, screensaver, control_center]
+        labels: { select: Select (OK), menu: Back, home: TV / Home, home_hold: Hold Home, top_menu: Top menu, play_pause: Play / Pause, skip_forward: Skip forward, skip_backward: Skip back, volume_up: Volume up, volume_down: Volume down, control_center: Control Center }
+    steps: [{ appletv: { key: "{{key}}" } }]
+  home:
+    label: Home
+    steps: [{ appletv: { key: home } }]
+  play_pause:
+    label: Play / Pause
+    steps: [{ appletv: { key: play_pause } }]
+  open_app:
+    label: Open an app
+    params:
+      app: { type: string, label: "App (from the list the Apple TV reports, or its bundle id)", optionsFrom: state.apps }
+    steps: [{ appletv: { app: "{{app}}" } }]
+
+state:
+  power: { type: enum, values: ["on", "off"], label: Power (reported by the Apple TV) }
+  app: { type: string, label: App in front }
+  appId: { type: string, label: App id }
+  title: { type: string, label: Playing }
+  playback: { type: string, label: Playback }
+  name: { type: string, label: Name on the Apple TV }
+  model: { type: string, label: Model }
+  os: { type: string, label: Software }
+
+# The connection turns what the Apple TV reports into small JSON messages.
+feedback:
+  - jsonPath: $.power
+    set: { power: "{{value | bool:on:off}}" }
+  - jsonPath: $.app
+    set: { app: "{{value}}" }
+  - jsonPath: $.appId
+    set: { appId: "{{value}}" }
+  - jsonPath: $.title
+    set: { title: "{{value}}" }
+  - jsonPath: $.playback
+    set: { playback: "{{value}}" }
+  - jsonPath: $.apps
+    set: { apps: "{{value}}" }
+  - jsonPath: $.name
+    set: { name: "{{value}}" }
+  - jsonPath: $.model
+    set: { model: "{{value}}" }
+  - jsonPath: $.os
+    set: { os: "{{value}}" }
+  - jsonPath: $.paired
+    set: { paired: "{{value}}" }
+
+capabilities:
+  power: { on: power_on, off: power_off, state: power }
+
+controls:
+  - { type: toggle, label: Awake, on: power_on, off: power_off, state: power }
+  - { type: status, label: App, state: app }
+  - { type: status, label: Playing, state: title, when: title }
+  - type: dpad
+    command: key
+    param: key
+    keys: { up: up, down: down, left: left, right: right, ok: select, back: menu, exit: home }
+  - { type: button, command: play_pause }
+  - { type: select, label: Open app, command: open_app, param: app, options: state.apps, state: appId, when: state.apps }
+
+simulator:
+  state:
+    power: "on"
+    app: Netflix
+    appId: com.netflix.Netflix
+    title: ""
+    model: Apple TV 4K (3rd generation)
+    os: tvOS 26.1
+    apps:
+      - { id: com.apple.TVWatchList, name: TV }
+      - { id: com.netflix.Netflix, name: Netflix }
+      - { id: com.espn.ScoreCenter, name: ESPN }
+      - { id: com.google.ios.youtube, name: YouTube }

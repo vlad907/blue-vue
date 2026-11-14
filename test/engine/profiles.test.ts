@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { identityStore, resetIdentity } from "../../agent/src/transports/androidtv/cert.ts";
 import { finishPairing, startPairing } from "../../agent/src/transports/androidtv/remote.ts";
+import { appleTvStore, helper as appleTvHelper, pairAppleTv, scanAppleTvs } from "../../agent/src/transports/appletv/helper.ts";
 import { FakeTv } from "../../agent/test/fake-android-tv.ts";
 import { FakeFireTv } from "../../agent/test/fake-adb-device.ts";
 import { resetAdbKey } from "../../agent/src/transports/adb/client.ts";
@@ -286,6 +287,63 @@ test("turning a wall on wakes a TV that keeps dropping its connection, then sele
   }
 });
 
+test("Apple TV profile: pairs in two steps, then keys, power and apps go through the helper, and a helper that dies is reported", async () => {
+  // A stand-in helper with the protocol of bluevue_atv.py; the real one needs an Apple TV.
+  process.env.BLUEVUE_ATV_HELPER = JSON.stringify([process.execPath, join(import.meta.dirname, "../fixtures/fake-atv-helper.mjs")]);
+  appleTvStore.dir = mkdtempSync(join(tmpdir(), "bv-atv-"));
+  const { manager, state, cleanup } = setup();
+  try {
+    manager.apply(site({ devices: [
+      { id: "bar", name: "Bar Apple TV", profile: "apple-tv", settings: { host: "192.168.5.40" } },
+      { id: "new", name: "New Apple TV", profile: "apple-tv", settings: { host: "192.168.5.99" } },
+    ] }));
+    const bar = () => state.state.devices.bar;
+    const fresh = () => state.state.devices.new;
+    await until(() => bar().online && fresh().state.paired === false);
+    assert.equal(bar().state.power, "off");
+    assert.equal(bar().state.model, "Apple TV 4K");
+    assert.deepEqual((bar().state.apps as { id: string }[]).map((a) => a.id), ["com.netflix.Netflix", "com.espn.ScoreCenter"]);
+
+    // An unpaired box is offline and says why; commands to it are refused.
+    assert.equal(fresh().online, false);
+    await assert.rejects(manager.execute("new", "home"), /paired/);
+
+    // Pairing: the first code, then a second one, and the box comes online by itself.
+    assert.deepEqual(await pairAppleTv("192.168.5.99", "start"), { done: false, more: false, message: undefined });
+    const first = await pairAppleTv("192.168.5.99", "finish", "1111");
+    assert.equal(first.done, false);
+    assert.equal(first.more, true);
+    assert.match(first.message!, /second code/);
+    assert.equal((await pairAppleTv("192.168.5.99", "finish", "2222")).done, true);
+    await until(() => fresh().online);
+    await pairAppleTv("192.168.5.99", "start");
+    await assert.rejects(pairAppleTv("192.168.5.99", "finish", "0000"), /doesn't match/);
+
+    // Power is discrete and the box's own report sets the state.
+    await manager.capability("bar", "power", "on");
+    assert.equal(bar().state.power, "on");
+    await manager.execute("bar", "key", { key: "select" });
+    await manager.execute("bar", "play_pause");
+    await assert.rejects(manager.execute("bar", "key", { key: "sideways" }), /key/);
+    await manager.execute("bar", "open_app", { app: "com.netflix.Netflix" });
+    await until(() => bar().state.app === "Netflix");
+    assert.equal(bar().state.appId, "com.netflix.Netflix");
+
+    assert.deepEqual(await scanAppleTvs(["192.168.5"]), [{ host: "192.168.5.40", name: "Bar Apple TV", model: "Apple TV 4K", mac: "AA:BB:CC:00:00:01" }]);
+    await assert.rejects(scanAppleTvs(["nope"]), /isn't a network/);
+
+    // The helper dying takes the boxes offline with a reason, not silently.
+    const runtime = (manager as unknown as { runtimes: Map<string, { conn: { send: (p: unknown) => Promise<unknown> } }> }).runtimes.get("bar")!;
+    await assert.rejects(runtime.conn.send({ kind: "appletv", key: "crash" }), /helper stopped/);
+    await until(() => !bar().online);
+    assert.match(bar().error ?? "", /helper stopped/);
+  } finally {
+    cleanup();
+    appleTvHelper.stop();
+    delete process.env.BLUEVUE_ATV_HELPER;
+  }
+});
+
 test("TCL Google TV remote profile in simulation follows on/off", async () => {
   const { manager, state, cleanup } = setup([], true);
   try {
@@ -478,6 +536,122 @@ test("mosaic engine profile: reads walls and presets live, recalls with the API 
     delete canvases["canvas-2"];
     await assert.rejects(manager.execute("tower", "clear", { group: "tower" }), /HTTP 409/);
     assert.equal(canvases["canvas-1"].groups[0].activePreset, "camera-1-full");
+  } finally {
+    cleanup();
+    engine.close();
+  }
+});
+
+test("mosaic engine profile: splits a wall, fills its slots, switches content and the background, and reads the result back", async () => {
+  // A fake engine with the arrangement, background and playlist requests of CONTROL_API.md.
+  const requests: { method: string; path: string; body: any }[] = [];
+  const names: Record<string, string[]> = { full: ["Whole"], two: ["Left", "Right"], quad: ["Top left", "Top right", "Bottom left", "Bottom right"] };
+  const wall = { id: "ultrawide", name: "Ultrawide", on: true, arrangement: "full", content: [{ ndiName: "PC (Cam 1)", playlist: "" }] as { ndiName: string; playlist: string }[], presets: [] as { id: string; name: string }[] };
+  const background = { on: false, chosen: false, ndiName: "", playlist: "", video: "", signal: "empty" };
+  const identify: unknown[] = [];
+  const control = () => ({
+    groups: [{
+      id: wall.id, name: wall.name, activePreset: "", presets: wall.presets, showing: [], noSignal: [],
+      on: wall.on, arrangement: wall.on ? wall.arrangement : "",
+      slots: wall.on ? names[wall.arrangement].map((name, i) => ({ slot: i + 1, name, ndiName: wall.content[i]?.ndiName ?? "", playlist: wall.content[i]?.playlist ?? "", video: "", signal: "ok" })) : [],
+      arrangements: [{ id: "full", name: "One stream", slots: 1 }, { id: "two", name: "Two side by side", slots: 2 }, { id: "quad", name: "Four", slots: 4 }],
+    }],
+    endpoints: [{ id: "wall-pc-1", name: "Wall PC 1", online: true, displays: 4, displaysOk: 4 }],
+    scenes: [], layouts: [], layout: { id: "venue", name: "Venue" },
+    ndi: { available: true, streams: ["PC (Cam 1)", "PC (Cam 2)"] },
+    playlists: [{ id: "Game day", name: "Game day", videos: 2 }],
+    background,
+  });
+  const engine = createHttpServer((req, res) => {
+    let raw = "";
+    req.on("data", (d) => (raw += d));
+    req.on("end", () => {
+      const url = new URL(req.url!, "http://x");
+      const send = (status: number, data: unknown) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(data)); };
+      if (req.method === "GET") {
+        if (url.pathname === "/api/control") return send(200, control());
+        if (url.pathname === "/api/canvases") return send(200, { canvases: [{ id: "canvas-1", name: "Inside bar", running: true, error: "" }, { id: "canvas-2", name: "Bar tower", running: false, error: "lost its GPU" }] });
+        if (url.pathname === "/api/layout") return send(200, { audioOutputs: [] });
+        if (url.pathname === "/api/audio") return send(200, { outputs: [] });
+        return send(404, { error: "not found" });
+      }
+      const body = JSON.parse(raw || "{}");
+      requests.push({ method: req.method!, path: url.pathname, body });
+      const fill = (b: any) => ({ ndiName: b.ndiName ?? "", playlist: b.playlist ?? "" });
+      let m;
+      if (url.pathname === "/api/walls/ultrawide/arrange") {
+        if (!names[body.arrangement]) return send(400, { error: "no such arrangement" });
+        wall.arrangement = body.arrangement;
+        wall.on = true;
+        return send(200, {});
+      }
+      if ((m = /^\/api\/walls\/ultrawide\/slots\/(\d+)$/.exec(url.pathname))) {
+        if (Number(m[1]) > names[wall.arrangement].length) return send(400, { error: `no slot ${m[1]}` });
+        wall.content[Number(m[1]) - 1] = fill(body);
+        return send(200, {});
+      }
+      if (url.pathname === "/api/walls/ultrawide/content") { wall.on = body.on; return send(200, {}); }
+      if (url.pathname === "/api/walls/ultrawide/presets") { wall.presets.push({ id: String(body.name).toLowerCase().replace(/ /g, "-"), name: body.name }); return send(201, {}); }
+      if (url.pathname === "/api/background") {
+        if (body.ndiName || body.playlist) Object.assign(background, fill(body), { chosen: true, signal: "ok" });
+        background.on = body.on ?? true;
+        return send(200, background);
+      }
+      if (url.pathname === "/api/endpoints/wall-pc-1/identify") { identify.push(body); return send(200, {}); }
+      send(404, { error: "not found" });
+    });
+  });
+  await new Promise<void>((r) => engine.listen(0, "127.0.0.1", r));
+  const { manager, state, cleanup } = setup();
+  try {
+    manager.apply(site({ devices: [{ id: "m", name: "M", profile: "mosaic-engine", settings: { host: "127.0.0.1", port: (engine.address() as { port: number }).port } }] }));
+    const st = () => state.state.devices.m.state;
+    const slots = () => (st().groupList as { slots: { slot: number; name: string; ndiName: string; playlist: string }[] }[])[0].slots;
+    await until(() => Array.isArray(st().groupList) && Array.isArray(st().canvasList));
+    assert.equal(st()["groups.ultrawide.arrangement"], "full");
+    assert.equal(st()["groups.ultrawide.on"], true);
+    assert.deepEqual((st()["groups.ultrawide.arrangements"] as { id: string }[]).map((a) => a.id), ["full", "two", "quad"]);
+    assert.deepEqual(st().playlists, [{ id: "Game day", name: "Game day", videos: 2 }]);
+    assert.equal(st()["background.signal"], "empty");
+    assert.equal(st()["canvases.canvas-2.running"], false);
+    assert.equal(st()["canvases.canvas-2.error"], "lost its GPU");
+
+    // Each change is followed by a fresh read, so the state is right without waiting for the poll.
+    await manager.execute("m", "arrange", { group: "ultrawide", arrangement: "two" });
+    assert.deepEqual(requests.at(-1), { method: "POST", path: "/api/walls/ultrawide/arrange", body: { arrangement: "two", transitionMs: 500 } });
+    assert.equal(st()["groups.ultrawide.arrangement"], "two");
+    assert.deepEqual(slots().map((s) => [s.slot, s.name, s.ndiName]), [[1, "Left", "PC (Cam 1)"], [2, "Right", ""]]);
+
+    await manager.execute("m", "slot_stream", { group: "ultrawide", slot: 2, ndiName: "PC (Cam 2)", transitionMs: 300 });
+    assert.deepEqual(requests.at(-1), { method: "POST", path: "/api/walls/ultrawide/slots/2", body: { ndiName: "PC (Cam 2)", transitionMs: 300 } });
+    assert.equal(slots()[1].ndiName, "PC (Cam 2)");
+    await manager.execute("m", "slot_playlist", { group: "ultrawide", slot: 1, playlist: "Game day" });
+    assert.deepEqual(slots().map((s) => [s.ndiName, s.playlist]), [["", "Game day"], ["PC (Cam 2)", ""]]);
+    await manager.execute("m", "slot_empty", { group: "ultrawide", slot: 2 });
+    assert.deepEqual(requests.at(-1)!.body, { transitionMs: 500 });
+    assert.equal(slots()[1].ndiName, "");
+    await assert.rejects(manager.execute("m", "slot_stream", { group: "ultrawide", slot: 3, ndiName: "PC (Cam 2)" }), /HTTP 400/);
+
+    await manager.execute("m", "content", { group: "ultrawide", on: false });
+    assert.deepEqual(requests.at(-1)!.body, { on: false, transitionMs: 500 });
+    assert.equal(st()["groups.ultrawide.on"], false);
+    await manager.execute("m", "content", { group: "ultrawide", on: true });
+    assert.equal(st()["groups.ultrawide.on"], true);
+
+    await manager.execute("m", "save_preset", { group: "ultrawide", name: "Game day split" });
+    assert.deepEqual((st()["groups.ultrawide.presets"] as { id: string }[]).map((p) => p.id), ["game-day-split"]);
+
+    await manager.execute("m", "background_playlist", { playlist: "Game day" });
+    assert.deepEqual(requests.at(-1)!.body, { on: true, playlist: "Game day", transitionMs: 1000 });
+    assert.deepEqual([st()["background.on"], st()["background.playlist"], st()["background.signal"]], [true, "Game day", "ok"]);
+    await manager.execute("m", "background_on", { on: false });
+    assert.equal(st()["background.on"], false);
+    assert.equal(st()["background.playlist"], "Game day");
+    await manager.execute("m", "background_stream", { ndiName: "PC (Cam 1)" });
+    assert.equal(st()["background.ndiName"], "PC (Cam 1)");
+
+    await manager.execute("m", "identify_screens", { endpoint: "wall-pc-1" });
+    assert.deepEqual(identify, [{ on: true }]);
   } finally {
     cleanup();
     engine.close();

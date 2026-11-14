@@ -26,14 +26,16 @@ export function localSubnets(): string[] {
 }
 
 /** How each kind of TV is found: the port it answers on, and where its name comes from. */
-export type ScanKind = "androidtv" | "roku" | "adb";
-const KINDS: Record<ScanKind, { port: number; info: (host: string) => Promise<Omit<FoundTv, "host">> }> = {
+export type ScanKind = "androidtv" | "roku" | "adb" | "appletv";
+const KINDS: Record<Exclude<ScanKind, "appletv">, { port: number; info: (host: string) => Promise<Omit<FoundTv, "host">> }> = {
   androidtv: { port: REMOTE_PORT, info: castInfo },
   roku: { port: 8060, info: rokuInfo },
   adb: { port: 5555, info: async () => ({}) },
 };
 
-export function scanTvs(kind: ScanKind, subnets?: string[]) {
+export async function scanTvs(kind: ScanKind, subnets?: string[]) {
+  // Apple TVs are found by their helper, which is loaded only when one is asked for.
+  if (kind === "appletv") return (await import("../appletv/helper.ts")).scanAppleTvs(subnets);
   return scanAndroidTvs(subnets, KINDS[kind].port, KINDS[kind].info);
 }
 
@@ -99,6 +101,9 @@ const ipNumber = (ip: string) => ip.split(".").reduce((n, p) => n * 256 + Number
 
 /** Stand-in results for simulation mode: 20 TVs. */
 export function simulatedTvs(kind: ScanKind = "androidtv"): FoundTv[] {
+  if (kind === "appletv") {
+    return ["Bar", "Patio", "Dining room"].map((room, i) => ({ host: `192.168.1.${220 + i}`, name: `${room} Apple TV`, model: "Apple TV 4K (3rd generation)", mac: `A0:B1:C2:00:01:0${i + 1}` }));
+  }
   const model = { androidtv: "TCL 98QM7L", roku: "TCL Roku TV 75S455", adb: undefined }[kind];
   const first = { androidtv: 145, roku: 170, adb: 200 }[kind];
   return Array.from({ length: 20 }, (_, i) => ({

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { learnOnce, sendirToPronto } from "../../agent/src/learn.ts";
 import { pairStep } from "../../agent/src/transports/androidtv/remote.ts";
+import { pairAppleTv, type PairResult } from "../../agent/src/transports/appletv/helper.ts";
 import { localSubnets, scanTvs, simulatedTvs } from "../../agent/src/transports/androidtv/scan.ts";
 import { SimulatedConnection, describe } from "../../agent/src/transports/index.ts";
 import { resolveSettings } from "../engine/device-manager.ts";
@@ -101,25 +102,29 @@ export function registerProfileRoutes(admin: FastifyInstance, engine: Engine) {
   });
 
   /**
-   * Pairs a saved Android TV device with this system: "start" makes the TV
-   * show a code, "finish" sends the code typed in. Runs where the device is
-   * reached from, since that machine's certificate is the one the TV learns.
+   * Pairs a saved Android TV or Apple TV with this system: "start" makes the
+   * TV show a code, "finish" sends the code typed in. Runs where the device
+   * is reached from, since that machine's identity is the one the TV learns.
+   * An Apple TV pairs in two steps: `more` says a second code is on screen.
    */
   admin.post("/api/admin/devices/:id/pair", async (req) => {
     const { id } = req.params as { id: string };
     const { step, code } = z.object({ step: z.enum(["start", "finish", "cancel"]), code: z.string().optional() }).parse(req.body);
     const device = engine.site().devices.find((d) => d.id === id);
     if (!device) throw fail(404, `No saved device "${id}"`);
-    if (engine.profiles.get(device.profile)?.transport.type !== "androidtv") throw fail(400, `${device.name} isn't an Android TV remote device`);
+    const kind = engine.profiles.get(device.profile)?.transport.type;
+    if (kind !== "androidtv" && kind !== "appletv") throw fail(400, `${device.name} isn't a device that pairs with a code`);
     const host = String(device.settings.host ?? "");
     if (!host) throw fail(400, `${device.name} has no IP address`);
+    let result: PairResult = { done: step !== "start" };
     try {
-      if (device.location === "server") await pairStep(host, step, code, engine.simulate);
+      if (kind === "appletv") result = device.location === "server" ? await pairAppleTv(host, step, code, engine.simulate) : await engine.agents.pairAppleTv(device.location, host, step, code);
+      else if (device.location === "server") await pairStep(host, step, code, engine.simulate);
       else await engine.agents.pairAndroidTv(device.location, host, step, code);
     } catch (err) {
       throw (err as { statusCode?: number }).statusCode ? err : fail(400, err instanceof Error ? err.message : String(err));
     }
-    return { ok: true, simulated: engine.simulate };
+    return { ok: true, simulated: engine.simulate, ...result };
   });
 
   /**
@@ -128,7 +133,7 @@ export function registerProfileRoutes(admin: FastifyInstance, engine: Engine) {
    */
   admin.post("/api/admin/discover/tvs", async (req) => {
     const { location, subnet, kind } = z
-      .object({ location: z.string().default("server"), subnet: z.string().optional(), kind: z.enum(["androidtv", "roku", "adb"]).default("androidtv") })
+      .object({ location: z.string().default("server"), subnet: z.string().optional(), kind: z.enum(["androidtv", "roku", "adb", "appletv"]).default("androidtv") })
       .parse(req.body);
     // "192.168.1", "192.168.1.0/24" and "192.168.1.x" all mean the same /24.
     const subnets = subnet?.trim() ? subnet.split(/[\s,]+/).filter(Boolean).map((n) => n.split("/")[0].split(".").slice(0, 3).join(".")) : undefined;
@@ -143,10 +148,50 @@ export function registerProfileRoutes(admin: FastifyInstance, engine: Engine) {
     }
     const byHost = new Map(engine.site().devices.map((d) => [String(d.settings.host ?? ""), d.id]));
     return {
-      subnets: subnets ?? (location === "server" ? localSubnets() : []),
+      // Apple TVs with no network given are found by asking the whole local network at once.
+      subnets: subnets ?? (location === "server" && kind !== "appletv" ? localSubnets() : []),
       simulated: engine.simulate,
       found: found.map((tv) => ({ ...tv, existing: byHost.get(tv.host) })),
     };
+  });
+
+  /**
+   * Asks a mosaic engine which canvases it runs, and what walls and presets
+   * each has, so the admin can add one device per canvas without typing ids.
+   */
+  admin.post("/api/admin/mosaic/canvases", async (req) => {
+    const { host, port } = z.object({ host: z.string().trim().regex(/^[A-Za-z0-9.-]+$/, "Enter the media server's IP address or name"), port: z.number().int().min(1).max(65535).default(8090) }).parse(req.body);
+    const used = (canvas: string) =>
+      engine.site().devices.find((d) => d.profile === "mosaic-engine" && String(d.settings.host ?? "") === host && String(d.settings.canvas ?? "") === canvas)?.id;
+    if (engine.simulate) {
+      return {
+        simulated: true,
+        canvases: [
+          { id: "canvas-1", name: "Inside bar", running: true, error: "", walls: [{ id: "main-wall", name: "Main wall", presets: 3 }, { id: "double-wide", name: "Double wide", presets: 1 }], existing: used("canvas-1") },
+          { id: "canvas-2", name: "Bar tower", running: true, error: "", walls: [{ id: "tower", name: "Tower", presets: 2 }], existing: used("canvas-2") },
+        ],
+      };
+    }
+    const get = async (path: string) => {
+      let res: Response;
+      try {
+        res = await fetch(`http://${host}:${port}${path}`, { signal: AbortSignal.timeout(5000) });
+      } catch {
+        throw fail(502, `No answer from ${host}:${port}. Check the address, that the mosaic engine is running, and that port ${port} is open on the media server.`);
+      }
+      if (!res.ok) throw fail(502, `The mosaic engine answered ${res.status} for ${path}`);
+      return (await res.json()) as any;
+    };
+    const list: any[] = (await get("/api/canvases")).canvases ?? [];
+    const canvases = await Promise.all(
+      list.map(async (c) => {
+        // A stopped canvas can't list its walls; it is still shown, with its problem.
+        const control = c.running === false ? undefined : await get(`/api/control?canvas=${encodeURIComponent(c.id)}`).catch(() => undefined);
+        const walls = ((control?.groups ?? []) as any[]).map((g) => ({ id: String(g.id), name: String(g.name ?? g.id), presets: Array.isArray(g.presets) ? g.presets.length : 0 }));
+        return { id: String(c.id), name: String(c.name ?? c.id), running: c.running !== false, error: String(c.error ?? ""), walls, existing: used(String(c.id)) };
+      }),
+    );
+    return { simulated: false, canvases };
   });
 
   /** Learns one IR code from a remote, with an iTach reached from the server or a wall PC. */
