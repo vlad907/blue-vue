@@ -7,7 +7,7 @@ import { AddMosaic } from "./Mosaic.tsx";
 import { AddTvs, PairControls, usePairing } from "./Tvs.tsx";
 
 const CATEGORY_LABELS: Record<string, string> = {
-  display: "Displays", tuner: "Tuners", audio: "Audio", "video-wall": "Video walls", switcher: "Switchers",
+  display: "Displays", tuner: "Tuners", player: "Streaming boxes", audio: "Audio", "video-wall": "Video walls", switcher: "Switchers",
   projector: "Projectors", lighting: "Lighting", other: "Other",
 };
 
@@ -190,7 +190,7 @@ function DeviceEditor({ device, onClose, onSave, onDelete }: { device?: SiteDevi
         <Check value={d.enabled} onChange={(enabled) => setD({ ...d, enabled })} label="Enabled" />
       </div>
 
-      {profile && profile.category !== "video-wall" && <PreviewLink device={d} onChange={(preview) => setD({ ...d, preview })} />}
+      {profile && ["tuner", "player"].includes(profile.category) && <PreviewLink device={d} onChange={(preview) => setD({ ...d, preview })} />}
 
       {profile && (
         <>

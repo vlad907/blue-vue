@@ -16,7 +16,7 @@ const TABS = [
   { id: "yaml", label: "YAML" },
 ] as const;
 
-export const CATEGORIES = ["display", "tuner", "audio", "video-wall", "switcher", "projector", "lighting", "other"];
+export const CATEGORIES = ["display", "tuner", "player", "audio", "video-wall", "switcher", "projector", "lighting", "other"];
 
 /**
  * Edits one device profile. Built-in profiles open read-only (duplicate them

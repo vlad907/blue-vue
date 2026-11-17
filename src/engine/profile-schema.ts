@@ -210,7 +210,7 @@ export const ProfileSchema = z.object({
   name: z.string(),
   manufacturer: z.string().optional(),
   model: z.string().optional(),
-  category: z.enum(["display", "tuner", "audio", "video-wall", "switcher", "projector", "lighting", "other"]).default("other"),
+  category: z.enum(["display", "tuner", "player", "audio", "video-wall", "switcher", "projector", "lighting", "other"]).default("other"),
   description: z.string().optional(),
   version: z.number().int().default(1),
   extends: z.string().optional(),

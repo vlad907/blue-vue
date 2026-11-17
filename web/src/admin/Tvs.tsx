@@ -30,7 +30,7 @@ export function AddTvs({ onClose }: { onClose: () => void }) {
   const { site, update, profiles, notice } = useDraft();
   const remoteProfiles = useMemo(
     // Ones that can be found on the network first, Google TV remote first of those.
-    () => Object.values(profiles).filter((p) => p.category === "display").sort((a, b) => rank(b) - rank(a) || a.name.localeCompare(b.name)),
+    () => Object.values(profiles).filter((p) => p.category === "display" || p.category === "player").sort((a, b) => rank(b) - rank(a) || a.name.localeCompare(b.name)),
     [profiles],
   );
   const [profile, setProfile] = useState(remoteProfiles[0]?.id);

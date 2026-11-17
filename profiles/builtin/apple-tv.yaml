@@ -2,7 +2,7 @@ id: apple-tv
 name: Apple TV
 manufacturer: Apple
 model: Apple TV 4K and Apple TV HD (tvOS 15 or newer)
-category: display
+category: player
 description: >
   Network control of an Apple TV box: remote keys, real power on and off,
   opening apps, and what's playing. It uses the same protocols as the iPhone's

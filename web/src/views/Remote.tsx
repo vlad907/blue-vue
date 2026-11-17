@@ -10,9 +10,8 @@ const LAST = "bluevue.remote";
 
 export function Remote() {
   const { ui, state } = useApp();
-  const walls = new Set(ui.groups.filter((g) => g.kind === "wall").flatMap((g) => g.devices));
-  // Anything with a d-pad that isn't a wall panel, and anything with a picture linked.
-  const devices = ui.devices.filter((d) => d.preview || (!walls.has(d.id) && ui.profiles[d.profile]?.controls.some((c) => c.type === "dpad")));
+  // The boxes staff drive by remote: cable boxes (tuners) and streaming boxes such as Apple TV (players). TVs aren't here.
+  const devices = ui.devices.filter((d) => ["tuner", "player"].includes(ui.profiles[d.profile]?.category ?? ""));
   const [chosen, setChosen] = useState(() => {
     try {
       return localStorage.getItem(LAST) ?? "";
@@ -30,7 +29,7 @@ export function Remote() {
     }
   };
 
-  if (!device) return <p className="empty">No devices with a remote yet. Add an Apple TV, a streaming box or a cable box in the admin.</p>;
+  if (!device) return <p className="empty">No Apple TVs or cable boxes yet. Add them in the admin.</p>;
   const profile = ui.profiles[device.profile];
   const view = state.devices[device.id];
   const roomName = (d: UiDevice) => ui.rooms.find((r) => r.id === d.room)?.name;

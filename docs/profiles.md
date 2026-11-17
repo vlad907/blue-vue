@@ -35,7 +35,7 @@ Examples to copy from:
 id: acme-projector            # lowercase letters, numbers, dashes
 name: Acme Projector
 manufacturer: Acme
-category: projector           # display, tuner, audio, video-wall, switcher, projector, lighting, other
+category: projector           # display, tuner (cable box), player (streaming box), audio, video-wall, switcher, projector, lighting, other. Tuners and players get a remote on the touch panel's Remote tab
 discover: roku                # optional: lets "+ Add TVs" find these on the network (androidtv, roku, adb or appletv)
 
 transport:
