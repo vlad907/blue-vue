@@ -10,6 +10,7 @@ export interface SiteDevice {
   room?: string;
   enabled: boolean;
   settings: Record<string, unknown>;
+  preview?: { device: string; stream: string };
 }
 
 export type SceneStep =

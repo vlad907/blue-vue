@@ -4,6 +4,7 @@ import { api, useLiveState, type Ui } from "./api.ts";
 import { AdminApp } from "./admin/AdminApp.tsx";
 import { AppProvider } from "./context.tsx";
 import { Guide } from "./views/Guide.tsx";
+import { Remote } from "./views/Remote.tsx";
 import { Rooms } from "./views/Rooms.tsx";
 import { Scenes } from "./views/Scenes.tsx";
 import { Walls } from "./views/Walls.tsx";
@@ -13,6 +14,7 @@ const TABS = [
   { id: "scenes", label: "Scenes", view: Scenes },
   { id: "walls", label: "Video Walls", view: Walls },
   { id: "rooms", label: "Rooms", view: Rooms },
+  { id: "remote", label: "Remote", view: Remote },
   { id: "guide", label: "TV Guide", view: Guide },
 ] as const;
 

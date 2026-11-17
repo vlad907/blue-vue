@@ -22,6 +22,13 @@ interface Deps {
   network?: () => InterfaceListener | undefined;
 }
 
+/** A stand-in picture for simulation mode: a moving bar, so the panel visibly refreshes. */
+function simulatedPreview(name: string, stream: string) {
+  const esc = (t: string) => t.replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  const x = Math.round(((Date.now() / 40) % 640) - 40);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360"><rect width="640" height="360" fill="#16233d"/><rect x="${x}" width="40" height="360" fill="#2b4170"/><text x="320" y="170" fill="#e8eefb" font-family="sans-serif" font-size="30" text-anchor="middle">${esc(name)}</text><text x="320" y="208" fill="#8fa3c7" font-family="sans-serif" font-size="16" text-anchor="middle">${esc(stream)} (simulated)</text></svg>`;
+}
+
 export const WEB_DIST = join(APP_ROOT, "web", "dist");
 
 export async function buildServer({ cfg, state, engine, guide, network }: Deps) {
@@ -74,7 +81,7 @@ export async function buildServer({ cfg, state, engine, guide, network }: Deps) 
       scenes: site.scenes.map(({ id, name, description }) => ({ id, name, description })),
       channels: site.channels,
       agents: site.agents.map(({ id, name }) => ({ id, name })),
-      devices: site.devices.map(({ id, name, profile, location, room, settings }) => ({ id, name, profile, location, room, settings })),
+      devices: site.devices.map(({ id, name, profile, location, room, settings, preview }) => ({ id, name, profile, location, room, settings, preview: !!preview })),
       profiles,
     };
   });
@@ -100,6 +107,34 @@ export async function buildServer({ cfg, state, engine, guide, network }: Deps) 
   });
 
   app.get("/api/v2/devices", async () => state.state.devices);
+
+  /**
+   * A small live picture of a device: the NDI stream linked to it, fetched from
+   * the mosaic engine that can see it. 202 while the first frame is on its way.
+   */
+  app.get("/api/v2/devices/:id/preview.jpg", async (req, reply) => {
+    const { id } = Id.parse(req.params);
+    const site = engine.site();
+    const device = site.devices.find((d) => d.id === id);
+    if (!device?.preview) return reply.status(404).send({ error: "No preview stream is linked to this device" });
+    reply.header("cache-control", "no-store");
+    if (cfg.simulate) {
+      return reply.header("x-signal", "ok").type("image/svg+xml").send(simulatedPreview(device.name, device.preview.stream));
+    }
+    const mosaic = site.devices.find((d) => d.id === device.preview!.device);
+    const host = String(mosaic?.settings.host ?? "");
+    if (!host) return reply.status(404).send({ error: "The mosaic engine for this preview isn't set up" });
+    let res: Response;
+    try {
+      res = await fetch(`http://${host}:${Number(mosaic!.settings.port ?? 8090)}/api/streams/preview.jpg?name=${encodeURIComponent(device.preview.stream)}`, { signal: AbortSignal.timeout(4000) });
+    } catch {
+      return reply.status(502).send({ error: "No answer from the mosaic engine" });
+    }
+    if (res.status === 202) return reply.status(202).send();
+    if (res.status === 404) return reply.status(502).send({ error: "This mosaic engine is too old to show stream previews. Update it." });
+    if (!res.ok) return reply.status(502).send({ error: ((await res.json().catch(() => ({}))) as { error?: string }).error ?? `The mosaic engine answered ${res.status}` });
+    return reply.header("x-signal", res.headers.get("x-signal") ?? "ok").type("image/jpeg").send(Buffer.from(await res.arrayBuffer()));
+  });
 
   app.get("/api/v2/devices/:id/log", async (req) => engine.devices.runtime(Id.parse(req.params).id).log);
 

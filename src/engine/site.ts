@@ -16,6 +16,10 @@ export const DeviceSchema = z.object({
   room: z.string().optional(),
   enabled: z.boolean().default(true),
   settings: z.record(z.unknown()).default({}),
+  // The NDI stream that carries this device's picture (its HDMI output into an encoder box),
+  // and the mosaic engine device whose media server can see that stream. Shown beside the
+  // device's remote on the touch panel.
+  preview: z.object({ device: z.string(), stream: z.string().min(1) }).optional(),
 });
 
 const SceneStep = z.discriminatedUnion("type", [
@@ -94,6 +98,7 @@ export function checkSite(site: Site): string[] {
   for (const d of site.devices) {
     if (d.room && !rooms.has(d.room)) errors.push(`device ${d.id}: unknown room "${d.room}"`);
     if (!locations.has(d.location)) errors.push(`device ${d.id}: unknown location "${d.location}"`);
+    if (d.preview && !devices.has(d.preview.device)) errors.push(`device ${d.id}: unknown mosaic device "${d.preview.device}" for its preview`);
   }
   for (const g of site.groups) {
     for (const id of g.devices) if (!devices.has(id)) errors.push(`group ${g.id}: unknown device "${id}"`);

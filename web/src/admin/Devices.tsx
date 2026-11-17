@@ -14,7 +14,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 /** Takes devices out of the site, and out of the walls and scenes that use them, so the site stays valid. */
 export function removeDevices(s: Site, ids: string[]): Site {
   const gone = new Set(ids);
-  s.devices = s.devices.filter((x) => !gone.has(x.id));
+  s.devices = s.devices.filter((x) => !gone.has(x.id)).map((x) => (x.preview && gone.has(x.preview.device) ? { ...x, preview: undefined } : x));
   s.groups = s.groups.map((g) => ({ ...g, devices: g.devices.filter((x) => !gone.has(x)) }));
   s.scenes = s.scenes.map((sc) => ({ ...sc, steps: sc.steps.filter((st) => !("device" in st) || !st.device || !gone.has(st.device)) }));
   return s;
@@ -190,6 +190,8 @@ function DeviceEditor({ device, onClose, onSave, onDelete }: { device?: SiteDevi
         <Check value={d.enabled} onChange={(enabled) => setD({ ...d, enabled })} label="Enabled" />
       </div>
 
+      {profile && profile.category !== "video-wall" && <PreviewLink device={d} onChange={(preview) => setD({ ...d, preview })} />}
+
       {profile && (
         <>
           <h3 className="section">Settings</h3>
@@ -231,6 +233,46 @@ function DeviceEditor({ device, onClose, onSave, onDelete }: { device?: SiteDevi
 }
 
 /** Runs any command on a saved device and shows its live traffic. */
+/**
+ * Links a device to the NDI stream that carries its picture (its HDMI output
+ * into an encoder box), so the touch panel's Remote tab shows what it's doing.
+ */
+function PreviewLink({ device: d, onChange }: { device: SiteDevice; onChange: (p: SiteDevice["preview"]) => void }) {
+  const { site } = useDraft();
+  const live = useLive();
+  const engines = site.devices.filter((x) => x.profile === "mosaic-engine");
+  if (!engines.length) return null;
+  const engine = d.preview?.device ?? engines[0].id;
+  // Every stream any canvas of that media server sees.
+  const host = engines.find((e) => e.id === engine)?.settings.host;
+  const streams = [...new Set(engines.filter((e) => e.settings.host === host).flatMap((e) => (live?.devices[e.id]?.state.streams as string[] | undefined) ?? []))].sort();
+  const hosts = engines.filter((e, i) => engines.findIndex((x) => x.settings.host === e.settings.host) === i);
+  return (
+    <>
+      <h3 className="section">Picture on the Remote tab</h3>
+      <div className="aform">
+        <Field label="NDI stream of this device" help="The encoder box this device's HDMI output goes into. The touch panel's Remote tab shows it live beside the remote.">
+          <Pick
+            value={d.preview?.stream}
+            empty="No picture"
+            options={[...new Set([...(d.preview ? [d.preview.stream] : []), ...streams])].map((s) => ({ value: s, label: s }))}
+            onChange={(stream) => onChange(stream ? { device: engine, stream } : undefined)}
+          />
+        </Field>
+        {!streams.length && <p className="help">The mosaic engine isn't reporting any streams right now, so there's nothing to pick. Or type the stream's full NDI name:</p>}
+        {(!streams.length || (d.preview && !streams.includes(d.preview.stream))) && (
+          <Text value={d.preview?.stream} placeholder="MACHINE (Stream)" onChange={(stream) => onChange(stream.trim() ? { device: engine, stream } : undefined)} />
+        )}
+        {hosts.length > 1 && d.preview && (
+          <Field label="Seen by">
+            <Pick value={engine} options={hosts.map((e) => ({ value: e.id, label: `${e.name} (${String(e.settings.host ?? "")})` }))} onChange={(device) => onChange({ device, stream: d.preview!.stream })} />
+          </Field>
+        )}
+      </div>
+    </>
+  );
+}
+
 function DeviceConsole({ id, unsaved, onClose }: { id: string; unsaved: boolean; onClose: () => void }) {
   const { site, profiles, notice } = useDraft();
   const state = useLive();

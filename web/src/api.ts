@@ -50,6 +50,7 @@ export interface UiDevice {
   location: string;
   room?: string;
   settings: Record<string, unknown>;
+  preview?: boolean; // an NDI stream of this device's picture is linked
 }
 
 export interface Channel {
