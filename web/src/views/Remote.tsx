@@ -47,7 +47,7 @@ export function Remote() {
       )}
       <div className="remote">
         <div className="remote-screen">
-          {device.preview ? <Preview key={device.id} device={device.id} /> : <div className="preview empty-preview">No picture linked to this device. Link its NDI stream in the admin (Devices → Edit).</div>}
+          {device.preview ? <Preview key={device.id} url={`/api/v2/devices/${device.id}/preview.jpg`} /> : <div className="preview empty-preview">No picture linked to this device. Link its NDI stream in the admin (Devices → Edit).</div>}
           <div className="remote-title">
             <h2>{device.name}</h2>
             <span className="muted">{[profile?.name, roomName(device)].filter(Boolean).join(" · ")}</span>
@@ -63,8 +63,8 @@ export function Remote() {
   );
 }
 
-/** Asks for a new picture a few times a second while the tab is in front. */
-function Preview({ device }: { device: string }) {
+/** Asks for a new picture a few times a second (or every `everyMs`) while the tab is in front. */
+export function Preview({ url, everyMs = 250 }: { url: string; everyMs?: number }) {
   const [src, setSrc] = useState<string>();
   const [note, setNote] = useState("Waiting for the picture…");
   const last = useRef<string>();
@@ -72,10 +72,11 @@ function Preview({ device }: { device: string }) {
     let stop = false;
     let timer: number;
     const tick = async () => {
-      let wait = 250;
-      if (!document.hidden) {
+      let wait = everyMs;
+      // A tab in the background keeps the picture it has, but still gets its first one.
+      if (!document.hidden || !last.current) {
         try {
-          const res = await fetch(`/api/v2/devices/${device}/preview.jpg?t=${Date.now()}`, { cache: "no-store" });
+          const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`, { cache: "no-store" });
           if (stop) return;
           if (res.status === 200) {
             const url = URL.createObjectURL(await res.blob());
@@ -86,7 +87,7 @@ function Preview({ device }: { device: string }) {
             setNote(res.headers.get("x-signal") === "lost" ? "No signal from the stream" : "");
           } else if (res.status === 202) {
             setNote((n) => n || "Waiting for the picture…");
-            wait = 600;
+            wait = Math.max(600, everyMs);
           } else {
             setNote(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `Preview unavailable (${res.status})`);
             wait = 3000;
@@ -104,7 +105,7 @@ function Preview({ device }: { device: string }) {
       clearTimeout(timer);
       if (last.current) URL.revokeObjectURL(last.current);
     };
-  }, [device]);
+  }, [url, everyMs]);
   return (
     <div className="preview">
       {src && <img src={src} alt="What this device is showing" />}

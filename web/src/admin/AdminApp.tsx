@@ -9,12 +9,14 @@ import { Groups, Rooms } from "./Layout.tsx";
 import { LiveProvider, useLive } from "./live.tsx";
 import { Profiles } from "./Profiles.tsx";
 import { Scenes } from "./Scenes.tsx";
+import { Remotes } from "./Remotes.tsx";
 import { Pairing } from "./Tvs.tsx";
 import "./admin.css";
 
 const PAGES = [
   { id: "devices", label: "Devices" },
   { id: "pairing", label: "TV pairing" },
+  { id: "remotes", label: "Remote pictures" },
   { id: "walls", label: "Video walls" },
   { id: "rooms", label: "Rooms" },
   { id: "scenes", label: "Scenes" },
@@ -108,6 +110,7 @@ function Shell({ onSignOut }: { onSignOut: () => void }) {
       <main className="admin-main">
         {page === "devices" && <Devices />}
         {page === "pairing" && <Pairing />}
+        {page === "remotes" && <Remotes />}
         {page === "walls" && <Groups />}
         {page === "rooms" && <Rooms />}
         {page === "scenes" && <Scenes />}

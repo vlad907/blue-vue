@@ -131,3 +131,9 @@ input.invalid { outline: 2px solid var(--bad); }
 .nic-list .acheck { gap: 8px; }
 .bulkbar { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(59,130,246,.08); }
 .bulkbar select { width: auto; }
+
+/* Remote pictures: a thumbnail of the chosen stream in each row. */
+.remotes td { vertical-align: middle; }
+.remotes .thumb { width: 200px; }
+.remotes .thumb .preview { width: 192px; border-radius: 8px; }
+.remotes .thumb .preview-note { font-size: 11px; left: 6px; bottom: 6px; padding: 2px 8px; }

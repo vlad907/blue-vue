@@ -4,6 +4,7 @@ import { useDraft } from "./draft.tsx";
 import { Check, Field, ParamsForm, Pick, SettingsForm, Text, defaultSettings } from "./forms.tsx";
 import { useLive } from "./live.tsx";
 import { AddMosaic } from "./Mosaic.tsx";
+import { useNdiStreams } from "./Remotes.tsx";
 import { AddTvs, PairControls, usePairing } from "./Tvs.tsx";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -238,20 +239,15 @@ function DeviceEditor({ device, onClose, onSave, onDelete }: { device?: SiteDevi
  * into an encoder box), so the touch panel's Remote tab shows what it's doing.
  */
 function PreviewLink({ device: d, onChange }: { device: SiteDevice; onChange: (p: SiteDevice["preview"]) => void }) {
-  const { site } = useDraft();
-  const live = useLive();
-  const engines = site.devices.filter((x) => x.profile === "mosaic-engine");
-  if (!engines.length) return null;
-  const engine = d.preview?.device ?? engines[0].id;
-  // Every stream any canvas of that media server sees.
-  const host = engines.find((e) => e.id === engine)?.settings.host;
-  const streams = [...new Set(engines.filter((e) => e.settings.host === host).flatMap((e) => (live?.devices[e.id]?.state.streams as string[] | undefined) ?? []))].sort();
-  const hosts = engines.filter((e, i) => engines.findIndex((x) => x.settings.host === e.settings.host) === i);
+  const { servers: hosts, streamsOf } = useNdiStreams();
+  if (!hosts.length) return null;
+  const engine = d.preview?.device ?? hosts[0].id;
+  const streams = streamsOf(engine);
   return (
     <>
       <h3 className="section">Picture on the Remote tab</h3>
       <div className="aform">
-        <Field label="NDI stream of this device" help="The encoder box this device's HDMI output goes into. The touch panel's Remote tab shows it live beside the remote.">
+        <Field label="NDI stream of this device" help="The encoder box this device's HDMI output goes into. The touch panel's Remote tab shows it live beside the remote. The Remote pictures page sets these for every device at once, with a thumbnail.">
           <Pick
             value={d.preview?.stream}
             empty="No picture"

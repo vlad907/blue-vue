@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import Fastify from "fastify";
+import Fastify, { type FastifyReply } from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import { z } from "zod";
@@ -117,16 +117,28 @@ export async function buildServer({ cfg, state, engine, guide, network }: Deps) 
     const site = engine.site();
     const device = site.devices.find((d) => d.id === id);
     if (!device?.preview) return reply.status(404).send({ error: "No preview stream is linked to this device" });
+    return streamPicture(reply, device.preview.device, device.preview.stream, device.name);
+  });
+
+  /**
+   * The same picture for any NDI stream by name, so the admin can see which
+   * stream is which before linking one to a device. `engine` is the mosaic
+   * engine device whose media server pulls the stream off the network.
+   */
+  app.get("/api/v2/streams/preview.jpg", async (req, reply) => {
+    const { engine: via, name } = z.object({ engine: z.string().min(1), name: z.string().min(1) }).parse(req.query);
+    return streamPicture(reply, via, name, name);
+  });
+
+  async function streamPicture(reply: FastifyReply, mosaicId: string, stream: string, label: string) {
     reply.header("cache-control", "no-store");
-    if (cfg.simulate) {
-      return reply.header("x-signal", "ok").type("image/svg+xml").send(simulatedPreview(device.name, device.preview.stream));
-    }
-    const mosaic = site.devices.find((d) => d.id === device.preview!.device);
+    if (cfg.simulate) return reply.header("x-signal", "ok").type("image/svg+xml").send(simulatedPreview(label, stream));
+    const mosaic = engine.site().devices.find((d) => d.id === mosaicId);
     const host = String(mosaic?.settings.host ?? "");
     if (!host) return reply.status(404).send({ error: "The mosaic engine for this preview isn't set up" });
     let res: Response;
     try {
-      res = await fetch(`http://${host}:${Number(mosaic!.settings.port ?? 8090)}/api/streams/preview.jpg?name=${encodeURIComponent(device.preview.stream)}`, { signal: AbortSignal.timeout(4000) });
+      res = await fetch(`http://${host}:${Number(mosaic!.settings.port ?? 8090)}/api/streams/preview.jpg?name=${encodeURIComponent(stream)}`, { signal: AbortSignal.timeout(4000) });
     } catch {
       return reply.status(502).send({ error: "No answer from the mosaic engine" });
     }
@@ -134,7 +146,7 @@ export async function buildServer({ cfg, state, engine, guide, network }: Deps) 
     if (res.status === 404) return reply.status(502).send({ error: "This mosaic engine is too old to show stream previews. Update it." });
     if (!res.ok) return reply.status(502).send({ error: ((await res.json().catch(() => ({}))) as { error?: string }).error ?? `The mosaic engine answered ${res.status}` });
     return reply.header("x-signal", res.headers.get("x-signal") ?? "ok").type("image/jpeg").send(Buffer.from(await res.arrayBuffer()));
-  });
+  }
 
   app.get("/api/v2/devices/:id/log", async (req) => engine.devices.runtime(Id.parse(req.params).id).log);
 

@@ -115,6 +115,16 @@ test("a device's preview picture comes from the mosaic engine that sees its NDI 
     assert.equal(old.statusCode, 502);
     assert.match(old.json().error, /too old/);
 
+    // The admin looks at any stream by name before linking it.
+    mode = "ok";
+    asked.length = 0;
+    const any = await app.inject({ method: "GET", url: `/api/v2/streams/preview.jpg?engine=mosaic&name=${encodeURIComponent("CAM (1)")}` });
+    assert.equal(any.statusCode, 200);
+    assert.deepEqual(any.rawPayload, jpeg);
+    assert.deepEqual(asked, ["CAM (1)"]);
+    assert.equal((await app.inject({ method: "GET", url: "/api/v2/streams/preview.jpg?engine=nope&name=X" })).statusCode, 404);
+    assert.equal((await app.inject({ method: "GET", url: "/api/v2/streams/preview.jpg?engine=mosaic" })).statusCode, 400);
+
     assert.equal((await get("plain")).statusCode, 404);
     assert.equal((await get("nope")).statusCode, 404);
   } finally {
