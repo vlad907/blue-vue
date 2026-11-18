@@ -25,6 +25,19 @@
         "BLUEVUE_PYTHON": ".venv/bin/python"
       },
       "port": 3000
+    },
+    {
+      "name": "blue-vue-mosaic-demo",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "start"
+      ],
+      "env": {
+        "BLUEVUE_SIMULATE": "1",
+        "BLUEVUE_DATA": "data/demo"
+      },
+      "port": 3000
     }
   ]
 }

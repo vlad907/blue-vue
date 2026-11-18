@@ -162,3 +162,52 @@ button.small { padding: 4px 10px; font-size: 13px; border-radius: 8px; border: 1
 .preview-note { position: absolute; left: 10px; bottom: 10px; padding: 4px 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.7); color: #fff; font-size: 13px; }
 .empty-preview { color: var(--muted); padding: 24px; text-align: center; background: var(--panel); }
 @media (max-width: 800px) { .remote { grid-template-columns: 1fr; } }
+
+/* Groups made by a repeat: laid out as before at the top, two across inside another group (a wall's pieces). */
+.control-groups { display: contents; }
+.control-group .control-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 700px) { .control-group .control-groups { grid-template-columns: 1fr; } }
+
+/* --- Mosaic walls drawn as screens: tap a piece, then choose its source beside it --- */
+.mosaic { display: grid; grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr); gap: 16px; align-items: start; margin-top: 8px; }
+.mosaic-walls { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.mosaic-wall { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.mosaic-wall h4 { margin: 0; font-size: 15px; color: var(--text); }
+.split-row, .preset-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.split { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-weight: 600; font-size: 14px; }
+.split.active { border-color: var(--accent); background: rgba(59,130,246,.18); }
+.split-icon { position: relative; width: 34px; height: 20px; flex: none; }
+.split-icon i { position: absolute; box-sizing: border-box; border: 1.5px solid var(--muted); border-radius: 2px; }
+.split.active .split-icon i { border-color: var(--text); }
+.preset-row .tile { padding: 10px 14px; }
+.screen { position: relative; aspect-ratio: 16 / 9; margin-top: 12px; background: #05080f; border: 2px solid var(--line); border-radius: 10px; overflow: hidden; }
+.screen.wide { aspect-ratio: 32 / 9; }
+.screen.off { opacity: .45; }
+.screen-note { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 12px; }
+.piece {
+  position: absolute; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 6px; min-width: 0; background: #101a2e; border: 1px solid #2c3d5e; color: var(--text); text-align: center; overflow: hidden;
+}
+.piece small { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+.piece b { font-size: clamp(14px, 2.2vw, 26px); overflow-wrap: anywhere; line-height: 1.1; }
+.piece em { font-style: normal; font-size: 12px; color: var(--warn); }
+.piece.empty { background: #070b14; }
+.piece.empty b { color: var(--muted); font-weight: 500; }
+.piece.selected { border: 3px solid var(--accent); background: rgba(59,130,246,.22); z-index: 1; }
+.backdrop {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; text-align: left; padding: 14px 16px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.backdrop small { color: var(--muted); font-size: 13px; }
+.backdrop b { flex: 1; font-size: 17px; }
+.backdrop.selected { border: 2px solid var(--accent); background: rgba(59,130,246,.14); }
+.mosaic-side { position: sticky; top: 64px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.mosaic-side h4 { margin: 0 0 10px; }
+.mosaic-side h4:not(:first-child) { margin-top: 16px; }
+.sources { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.sources .tile { font-size: 17px; min-height: 64px; }
+.side-row { margin-bottom: 12px; }
+.side-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.side-actions .btn { flex: 1; min-width: 130px; }
+.side-actions .btn:disabled { opacity: .4; }
+@media (max-width: 800px) { .mosaic { grid-template-columns: 1fr; } .mosaic-side { position: static; } }

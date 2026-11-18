@@ -273,8 +273,8 @@
           "device": "mosaic",
           "command": "recall_preset",
           "params": {
-            "group": "main-wall",
-            "preset": "camera-1-full",
+            "group": "wall",
+            "preset": "box-1",
             "transitionMs": 500
           }
         },
@@ -325,8 +325,8 @@
           "device": "mosaic",
           "command": "recall_preset",
           "params": {
-            "group": "main-wall",
-            "preset": "quad",
+            "group": "wall",
+            "preset": "chive",
             "transitionMs": 500
           }
         },

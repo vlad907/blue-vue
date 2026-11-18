@@ -1,5 +1,6 @@
 import { api, type Control, type UiDevice, type UiProfile } from "../api.ts";
 import { Controls } from "../components/Controls.tsx";
+import { MosaicPanel, canDraw, type MosaicGroup } from "../components/MosaicPanel.tsx";
 import { useApp } from "../context.tsx";
 import { isOn } from "../template.ts";
 
@@ -133,6 +134,13 @@ function LinkedMosaic({ link }: { link: { device: string; group: string } }) {
   const list = state.devices[device.id]?.state.groupList;
   const item = Array.isArray(list) ? (list as { id: string }[]).find((g) => g.id === link.group) : undefined;
   if (!groupControl || !item) return <p className="muted">Mosaic wall “{link.group}” isn't reporting right now.</p>;
+  if (canDraw(profile, item as MosaicGroup)) {
+    return (
+      <div className="mosaic-linked">
+        <MosaicPanel device={device} profile={profile} groups={[item as MosaicGroup]} background={false} />
+      </div>
+    );
+  }
   return (
     <div className="mosaic-linked">
       <Controls device={device} profile={profile} controls={groupControl.controls ?? []} item={item} />
@@ -145,14 +153,19 @@ function MosaicSection({ device, profile, skip }: { device: UiDevice; profile: U
   const groupControl = profile.controls.find((c) => c.type === "group" && c.repeat);
   const list = state.devices[device.id]?.state.groupList;
   const unlinked = Array.isArray(list) ? (list as { id: string; name?: string }[]).filter((g) => !skip.has(g.id)) : [];
-  const others: Control[] = profile.controls.filter((c) => c !== groupControl && (c.type === "presets" || c.type === "group"));
+  // Walls the engine reports splits for are drawn; tap a piece, then its source. The rest keep the plain controls.
+  const drawn = unlinked.filter((g) => canDraw(profile, g as MosaicGroup)) as MosaicGroup[];
+  const plain = unlinked.filter((g) => !canDraw(profile, g as MosaicGroup));
+  // The drawn panel has the background in it, so the plain background card (a group with no repeat) is left out.
+  const others: Control[] = profile.controls.filter((c) => c !== groupControl && (c.type === "presets" || (c.type === "group" && (!drawn.length || !!c.repeat))));
   if (!unlinked.length && !others.length) return null;
   return (
     <div>
       <h2>{device.name}</h2>
+      {drawn.length > 0 && <MosaicPanel device={device} profile={profile} groups={drawn} background />}
       <div className="controls">
         {groupControl &&
-          unlinked.map((g) => (
+          plain.map((g) => (
             <div className="control-group" key={g.id}>
               <h4>{g.name ?? g.id}</h4>
               <Controls device={device} profile={profile} controls={groupControl.controls ?? []} item={g} />

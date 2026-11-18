@@ -1,0 +1,33 @@
+{
+  "name": "Blue Vue (mosaic demo)",
+  "rooms": [],
+  "devices": [
+    {
+      "id": "inside-bar",
+      "name": "Inside bar",
+      "profile": "mosaic-engine",
+      "settings": {
+        "host": "10.0.10.60",
+        "canvas": "canvas-1"
+      }
+    },
+    {
+      "id": "ultrawide",
+      "name": "Ultrawide",
+      "profile": "mosaic-engine",
+      "settings": {
+        "host": "10.0.10.60",
+        "canvas": "canvas-3"
+      }
+    },
+    {
+      "id": "outside-tv",
+      "name": "Outside TV",
+      "profile": "mosaic-engine",
+      "settings": {
+        "host": "10.0.10.60",
+        "canvas": "canvas-4"
+      }
+    }
+  ]
+}

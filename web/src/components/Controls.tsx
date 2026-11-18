@@ -44,20 +44,22 @@ function ControlView({ device, profile, control: c, item, parent }: { device: Ui
   const coerce = (v: unknown) => (param?.type === "integer" || param?.type === "number" ? Number(v) : v);
 
   if (c.when && isBlank(resolve(render(c.when, ctx), ctx))) return null;
+  if (c.unless && isOn(resolve(render(c.unless, ctx), ctx))) return null;
 
   switch (c.type) {
     case "group": {
-      const list = c.repeat ? resolve(c.repeat, ctx) : [undefined];
+      const list = c.repeat ? resolve(render(c.repeat, ctx), ctx) : [undefined];
       if (!Array.isArray(list) || !list.length) return null;
+      // The wrapper lets groups inside a group sit side by side (the pieces of a split wall).
       return (
-        <>
+        <div className="control-groups">
           {list.map((it, i) => (
             <div className="control-group" key={i}>
               <h4>{render(c.label, c.repeat ? { ...ctx, item: it, parent: item } : ctx)}</h4>
               <Controls device={device} profile={profile} controls={c.controls ?? []} item={c.repeat ? it : item} parent={c.repeat ? item : parent} />
             </div>
           ))}
-        </>
+        </div>
       );
     }
 

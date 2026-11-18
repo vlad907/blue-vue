@@ -41,7 +41,8 @@ function matches(rule: ParseRule, text: string): Record<string, unknown>[] {
       return [];
     }
     // "[*]" yields one match per list item, so one rule can fill state for every group, zone, etc.
-    return jsonPathAll(data, rule.jsonPath).map((value) => ({ value }));
+    const found = jsonPathAll(data, rule.jsonPath);
+    return rule.all ? [{ value: found }] : found.map((value) => ({ value }));
   }
   return [];
 }
@@ -51,10 +52,14 @@ export function jsonPath(data: unknown, path: string): unknown {
   return jsonPathAll(data, path)[0];
 }
 
-/** Like jsonPath, but "[*]" (or ".*") fans out over every item of a list or object. */
+/**
+ * Like jsonPath, but "[*]" (or ".*") fans out over every item of a list or object,
+ * and "[?kind=video]" keeps only the items of a list whose field has that value.
+ */
 export function jsonPathAll(data: unknown, path: string): unknown[] {
   const parts = path
     .replace(/^\$\.?/, "")
+    .replace(/\[\?([\w-]+)=([^\]]*)\]/g, ".?$1=$2")
     .replace(/\[(\d+|\*)\]/g, ".$1")
     .split(".")
     .filter(Boolean);
@@ -63,7 +68,10 @@ export function jsonPathAll(data: unknown, path: string): unknown[] {
     const next: unknown[] = [];
     for (const cur of current) {
       if (cur === null || typeof cur !== "object") continue;
-      if (p === "*") next.push(...Object.values(cur as Record<string, unknown>));
+      const filter = /^\?([\w-]+)=(.*)$/.exec(p);
+      if (filter) {
+        next.push(...Object.values(cur as Record<string, unknown>).filter((it) => it !== null && typeof it === "object" && String((it as Record<string, unknown>)[filter[1]]) === filter[2]));
+      } else if (p === "*") next.push(...Object.values(cur as Record<string, unknown>));
       else if ((cur as Record<string, unknown>)[p] !== undefined) next.push((cur as Record<string, unknown>)[p]);
     }
     current = next;

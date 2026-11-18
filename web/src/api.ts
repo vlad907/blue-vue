@@ -26,6 +26,7 @@ export interface Control {
   repeat?: string;
   options?: string;
   when?: string;
+  unless?: string;
   controls?: Control[];
 }
 

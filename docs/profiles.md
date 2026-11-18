@@ -112,7 +112,10 @@ Optional parts of a command:
 | `bool:1:0` | turn true/false into text |
 | `hex:2`, `pad:3` | hex with zero padding, or pad with zeros |
 | `upper`, `lower`, `digits`, `default:x`, `json` | |
+| `carry:slot:@state.old:ndiName,signal` | a copy of a list where each item takes the named fields from the item of another list with the same key |
 | `patch:id:@output:volumeDb:@volumeDb` | a copy of a list with one field of the matching item changed, for APIs that take a whole list back. Refuses if the list hasn't been read or has no such item |
+
+A `[name]` inside a path is filled in first, so a state key that contains a param can be read: with `group` = `wall`, `{{state.groups.[group].slots}}` reads the state key `groups.wall.slots`.
 
 An argument starting with `@` is read from the context instead of written literally: `clamp:@settings.min:100`, `default:@value.sourceError`.
 
@@ -121,12 +124,15 @@ An argument starting with `@` is read from the context instead of written litera
 ## Reading state
 - `regex` uses named groups (`(?<zone>\d+)`), or `value` for the first group, and runs for every match in a message.
 - `xmlTag: power-mode` reads the text inside that tag.
-- `jsonPath: $.status.inputs[0].name` reads a value from JSON.
+- `jsonPath: $.status.inputs[0].name` reads a value from JSON. `[*]` runs the rule once per item of a list, `[?kind=video]` keeps only the items whose field has that value, and `all: true` gives the rule every match as one list in `value`.
 
 The `set` keys are templates too, so one rule can fill per-zone state: `"zones.{{zone}}.gain": "{{val}}"`. Declare state types under `state:`. Keys can use `*`, e.g. `"zones.*.mute": { type: boolean }`.
 
 ## Controls
-Controls are listed under `controls:`. A `group` with `repeat: state.someList` draws its controls once per item, with `{{item.…}}` for that item. A group inside it can repeat a list of the item (`repeat: item.slots`); there, `{{parent.…}}` is the outer item. Any control can have `when: <state key or list>`: it is shown only while that value has something in it, so a control for a feature the device doesn't report stays hidden. `mosaic-engine.yaml` uses all three.
+Controls are listed under `controls:`. A `group` with `repeat: state.someList` draws its controls once per item, with `{{item.…}}` for that item. A group inside it can repeat a list of the item (`repeat: item.slots`); there, `{{parent.…}}` is the outer item. Any control can have `when: <state key or list>`: it is shown only while that value has something in it, so a control for a feature the device doesn't report stays hidden. `unless: settings.someSwitch` is the opposite: the control is hidden while that setting (or state value) is on, which lets one tick box on a device switch a group of controls off. `mosaic-engine.yaml` uses all three.
+
+## Simulation
+In simulation mode a device starts with the state under `simulator: state:`. To let devices of one type differ, name a setting with `by:` and list state per value under `states:`; a device whose value isn't listed gets the `""` entry. A command's `sets` also run in simulation. Where the real device would report a change itself (so the command has no `sets`), give the command `simulatorSets:` with the same shape: they are applied only to simulated devices, so the panel reacts like the real thing. `mosaic-engine.yaml` uses all of this: one simulated wall per canvas, and split, slot, content and background commands that change it.
 
 ## Capabilities
 Capabilities connect your commands to features the rest of the system uses:

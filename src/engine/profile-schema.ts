@@ -80,6 +80,8 @@ export const ParseRule = z
     regex: z.string().optional(),
     xmlTag: z.string().optional(),
     jsonPath: z.string().optional(),
+    // jsonPath only: `value` is the list of every match, instead of the rule running once per match.
+    all: z.boolean().optional(),
     set: z.record(z.string()), // state key template -> value template
   })
   .refine((r) => [r.regex, r.xmlTag, r.jsonPath].filter((x) => x !== undefined).length === 1, {
@@ -108,6 +110,9 @@ export const Command = z.object({
   steps: z.array(Step).min(1),
   // Optimistic state after the command, for devices with no feedback (IR).
   sets: z.record(z.string()).optional(),
+  // What the command changes on a simulated device, so simulation mode behaves like the real
+  // thing where the real device would report the change itself. Never applied to real devices.
+  simulatorSets: z.record(z.string()).optional(),
   parse: z.array(ParseRule).optional(), // applied to request/response replies (http, adb)
   hidden: z.boolean().optional(), // internal helper, not offered in scene builder
 });
@@ -157,6 +162,7 @@ export type Control = {
   repeat?: string; // group: repeat for each item of a settings list
   options?: string; // select/presets: settings list to offer, e.g. "settings.favorites"
   when?: string; // shown only while this state value or list has something in it
+  unless?: string; // hidden while this setting or state value is on, e.g. "settings.noSound"
   controls?: Control[];
 };
 export const Control: z.ZodType<Control> = z.lazy(() =>
@@ -173,6 +179,7 @@ export const Control: z.ZodType<Control> = z.lazy(() =>
     repeat: z.string().optional(),
     options: z.string().optional(),
     when: z.string().optional(),
+    unless: z.string().optional(),
     controls: z.array(Control).optional(),
   }),
 );
@@ -228,6 +235,11 @@ export const ProfileSchema = z.object({
   keepalive: z.object({ every: z.number().positive(), steps: z.array(Step) }).optional(),
   capabilities: Capabilities.default({}),
   controls: z.array(Control).default([]),
-  simulator: z.object({ state: z.record(z.unknown()).default({}) }).default({}),
+  // Simulation mode: the state a simulated device starts with. `by` names a setting whose value
+  // picks extra state from `states`, so devices of one type can differ (a mosaic engine per canvas).
+  // A device whose value isn't listed gets the "" entry, if there is one.
+  simulator: z
+    .object({ state: z.record(z.unknown()).default({}), by: z.string().optional(), states: z.record(z.record(z.unknown())).default({}) })
+    .default({}),
 });
 export type Profile = z.infer<typeof ProfileSchema>;

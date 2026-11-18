@@ -41,6 +41,30 @@ test("parse rules: regex matches repeatedly, xmlTag and jsonPath extract values"
   });
   assert.deepEqual(applyRules([{ jsonPath: "$.groups", set: { groupList: "{{value}}" } }], control).groupList, JSON.parse(control).groups);
   assert.deepEqual(applyRules([{ jsonPath: "$.x", set: { x: "{{value}}" } }], "not json"), {});
+  // [?field=value] keeps matching items, and `all` hands the rule every match as one list.
+  const media = '{"files":[{"name":"logo.png","kind":"image"},{"name":"a.mp4","kind":"video"},{"name":"b.mov","kind":"video"}]}';
+  assert.deepEqual(applyRules([{ jsonPath: "$.files[?kind=video]", all: true, set: { videos: "{{value}}" } }], media), { videos: [{ name: "a.mp4", kind: "video" }, { name: "b.mov", kind: "video" }] });
+  assert.deepEqual(applyRules([{ jsonPath: "$.files[?kind=audio]", all: true, set: { sounds: "{{value}}" } }], media), { sounds: [] });
+  assert.deepEqual(applyRules([{ jsonPath: "$.files[?kind=image]", set: { "pic.{{value.name}}": "yes" } }], media), { "pic.logo.png": "yes" });
+});
+
+test("a [name] in a path is filled in first, and carry keeps fields of matching items", () => {
+  const ctx = {
+    group: "wall", arrangement: "two",
+    state: {
+      "groups.wall.slots": [{ slot: 1, name: "Top left", ndiName: "CAM 1", signal: "ok" }, { slot: 2, name: "Top right", ndiName: "CAM 2", signal: "ok" }],
+      "sim.slots.two": [{ slot: 1, name: "Left", ndiName: "", signal: "empty" }, { slot: 2, name: "Right", ndiName: "", signal: "empty" }, { slot: 3, name: "Extra", ndiName: "", signal: "empty" }],
+    },
+  };
+  assert.equal((renderValue("{{state.groups.[group].slots}}", ctx) as unknown[]).length, 2);
+  assert.equal(renderValue("{{state.groups.[missing].slots}}", ctx), undefined);
+  assert.deepEqual(renderValue("{{state.sim.slots.[arrangement] | carry:slot:@state.groups.[group].slots:ndiName,signal}}", ctx), [
+    { slot: 1, name: "Left", ndiName: "CAM 1", signal: "ok" },
+    { slot: 2, name: "Right", ndiName: "CAM 2", signal: "ok" },
+    { slot: 3, name: "Extra", ndiName: "", signal: "empty" },
+  ]);
+  assert.equal((ctx.state["sim.slots.two"][0] as { ndiName: string }).ndiName, ""); // the original is left alone
+  assert.throws(() => render("{{state.nope | carry:slot:@state.groups.[group].slots:ndiName}}", ctx), /no list to fill/);
 });
 
 test("patch changes one field of one list item, reading arguments with @", () => {

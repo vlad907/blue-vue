@@ -22,6 +22,7 @@ settings:
   - { key: port, label: Port, type: integer, default: 8090 }
   - { key: canvas, label: Canvas, type: string, help: "canvas-1, canvas-2, ... (see http://media-server:8090/api/canvases). Blank: the main canvas" }
   - { key: apiKey, label: API key, type: string, help: "Only if one is set in the mosaic editor" }
+  - { key: noSound, label: No sound on this canvas, type: boolean, default: false, help: "Tick for walls that don't need sound. The touch panel then shows no sound controls (volume, mute, what plays) for this canvas" }
 
 commands:
   # Everything about the canvas in one request. The poll below uses the same
@@ -67,6 +68,7 @@ commands:
           "background.on": "{{value.on}}"
           "background.ndiName": "{{value.ndiName}}"
           "background.playlist": "{{value.playlist}}"
+          "background.video": "{{value.video}}"
           "background.signal": "{{value.signal}}"
 
   recall_preset:
@@ -81,8 +83,9 @@ commands:
           path: "/api/walls/{{group}}/presets/{{preset}}/recall?canvas={{settings.canvas}}"
           body: '{"transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
-    sets: { "groups.{{group}}.activePreset": "{{preset}}" }
-
+    sets: { "groups.{{group}}.activePreset": "{{preset}}", "groups.{{group}}.stream": "" }
+    simulatorSets:
+      "groups.{{group}}.on": "true"
   show_stream:
     label: Show a stream on a whole wall
     params:
@@ -96,7 +99,10 @@ commands:
           body: '{"ndiName": {{ndiName | json}}, "transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
     sets: { "groups.{{group}}.activePreset": "", "groups.{{group}}.stream": "{{ndiName}}" }
-
+    simulatorSets:
+      "groups.{{group}}.on": "true"
+      "groups.{{group}}.arrangement": full
+      "groups.{{group}}.slots": "{{state.sim.slots.full | patch:slot:1:ndiName:@ndiName | patch:slot:1:signal:ok}}"
   clear:
     label: Blank a wall
     params:
@@ -109,7 +115,8 @@ commands:
           body: '{"transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
     sets: { "groups.{{group}}.activePreset": "", "groups.{{group}}.stream": "" }
-
+    simulatorSets:
+      "groups.{{group}}.on": "false"
   restart_videos:
     label: Restart a wall's videos together
     params:
@@ -137,7 +144,12 @@ commands:
           body: '{"arrangement": {{arrangement | json}}, "transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
       - { command: read_control }
-
+    sets: { "groups.{{group}}.stream": "" }
+    simulatorSets:
+      "groups.{{group}}.on": "true"
+      "groups.{{group}}.arrangement": "{{arrangement}}"
+      # The new pieces keep what the same-numbered pieces played, as the engine does.
+      "groups.{{group}}.slots": "{{state.sim.slots.[arrangement] | carry:slot:@state.groups.[group].slots:ndiName,playlist,video,signal}}"
   slot_stream:
     label: Put a stream in one slot of a wall
     params:
@@ -152,7 +164,9 @@ commands:
           body: '{"ndiName": {{ndiName | json}}, "transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
       - { command: read_control }
-
+    sets: { "groups.{{group}}.stream": "" }
+    simulatorSets:
+      "groups.{{group}}.slots": "{{state.groups.[group].slots | patch:slot:@slot:ndiName:@ndiName | patch:slot:@slot:playlist: | patch:slot:@slot:video: | patch:slot:@slot:signal:ok}}"
   slot_playlist:
     label: Put a playlist in one slot of a wall
     params:
@@ -167,21 +181,24 @@ commands:
           body: '{"playlist": {{playlist | json}}, "transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
       - { command: read_control }
-
+    sets: { "groups.{{group}}.stream": "" }
+    simulatorSets:
+      "groups.{{group}}.slots": "{{state.groups.[group].slots | patch:slot:@slot:ndiName: | patch:slot:@slot:playlist:@playlist | patch:slot:@slot:video: | patch:slot:@slot:signal:ok}}"
   slot_empty:
     label: Empty one slot of a wall
     params:
       group: { type: string, label: Wall, optionsFrom: state.groupList }
       slot: { type: integer, label: Slot, min: 1, max: 64, default: 1 }
-      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 500 }
     steps:
       - http:
           method: POST
           path: "/api/walls/{{group}}/slots/{{slot}}?canvas={{settings.canvas}}"
-          body: '{"transitionMs": {{transitionMs}}}'
+          body: '{}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
       - { command: read_control }
-
+    sets: { "groups.{{group}}.stream": "" }
+    simulatorSets:
+      "groups.{{group}}.slots": "{{state.groups.[group].slots | patch:slot:@slot:ndiName: | patch:slot:@slot:playlist: | patch:slot:@slot:video: | patch:slot:@slot:signal:empty}}"
   content:
     label: Wall content on or off
     params:
@@ -195,7 +212,8 @@ commands:
           body: '{"on": {{on}}, "transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
       - { command: read_control }
-
+    simulatorSets:
+      "groups.{{group}}.on": "{{on}}"
   save_preset:
     label: Save what a wall shows as a preset
     params:
@@ -222,7 +240,8 @@ commands:
           body: '{"on": {{on}}, "transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
       - { command: read_control }
-
+    simulatorSets:
+      "background.on": "{{on}}"
   background_stream:
     label: Background plays a stream
     params:
@@ -235,7 +254,12 @@ commands:
           body: '{"on": true, "ndiName": {{ndiName | json}}, "transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
       - { command: read_control }
-
+    simulatorSets:
+      "background.on": "true"
+      "background.ndiName": "{{ndiName}}"
+      "background.playlist": ""
+      "background.video": ""
+      "background.signal": ok
   background_playlist:
     label: Background plays a playlist
     params:
@@ -248,6 +272,30 @@ commands:
           body: '{"on": true, "playlist": {{playlist | json}}, "transitionMs": {{transitionMs}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
       - { command: read_control }
+    simulatorSets:
+      "background.on": "true"
+      "background.ndiName": ""
+      "background.playlist": "{{playlist}}"
+      "background.video": ""
+      "background.signal": ok
+  background_video:
+    label: Background plays one video file
+    params:
+      video: { type: string, label: Video file, optionsFrom: state.videos }
+      transitionMs: { type: integer, label: Crossfade (ms), min: 0, max: 10000, default: 1000 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/background?canvas={{settings.canvas}}"
+          body: '{"video": {{video | json}}, "on": true, "transitionMs": {{transitionMs}}}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+      - { command: read_control }
+    simulatorSets:
+      "background.on": "true"
+      "background.ndiName": ""
+      "background.playlist": ""
+      "background.video": "{{video}}"
+      "background.signal": ok
 
   # Setup help: every screen of a receiving PC shows its number for 10 minutes.
   identify_screens:
@@ -352,6 +400,7 @@ state:
   "background.on": { type: boolean, label: Background on }
   "background.ndiName": { type: string, label: Background stream }
   "background.playlist": { type: string, label: Background playlist }
+  "background.video": { type: string, label: Background video }
   "background.signal": { type: string, label: Background signal }
   "canvases.*.running": { type: boolean, label: Canvas running }
   "canvases.*.error": { type: string, label: Canvas problem }
@@ -379,6 +428,14 @@ polls:
       - jsonPath: "$.outputs[*]"
         set: { "audio.{{value.id}}.problem": "{{value.error | default:@value.sourceError}}" }
 
+  # The video files in the media folder, for the background's video picker.
+  - every: 15
+    steps: [{ http: { method: GET, path: "/api/media?canvas={{settings.canvas}}" } }]
+    parse:
+      - jsonPath: "$.files[?kind=video]"
+        all: true
+        set: { videos: "{{value}}" }
+
   # Every canvas the media server runs, and whether each is running.
   - every: 15
     steps: [{ http: { method: GET, path: "/api/canvases" } }]
@@ -404,13 +461,14 @@ controls:
       # Split screens: pick how the wall is divided, then what each part plays.
       - { type: presets, label: Split, command: arrange, param: arrangement, params: { group: "{{item.id}}" }, options: item.arrangements, state: "groups.{{item.id}}.arrangement" }
       - type: group
-        repeat: item.slots
+        repeat: "groups.{{item.id}}.slots"
         label: "{{item.name}}"
         controls:
           - { type: select, label: Stream, command: slot_stream, param: ndiName, params: { group: "{{parent.id}}", slot: "{{item.slot}}" }, options: state.streams, state: item.ndiName }
           - { type: select, label: Playlist, command: slot_playlist, param: playlist, params: { group: "{{parent.id}}", slot: "{{item.slot}}" }, options: state.playlists, state: item.playlist, when: state.playlists }
+          - { type: button, label: Empty, command: slot_empty, params: { group: "{{parent.id}}", slot: "{{item.slot}}" } }
       - { type: toggle, label: Content, command: content, param: "on", params: { group: "{{item.id}}" }, state: "groups.{{item.id}}.on", when: item.arrangements }
-      - { type: status, label: On screen, state: "groups.{{item.id}}.showing" }
+      - { type: status, label: On screen, state: "groups.{{item.id}}.showing", when: "groups.{{item.id}}.showing" }
       - { type: status, label: No signal from, state: "groups.{{item.id}}.noSignal" }
       - { type: button, label: Blank this wall, command: clear, params: { group: "{{item.id}}" } }
       - { type: button, label: Restart videos, command: restart_videos, params: { group: "{{item.id}}" } }
@@ -422,9 +480,11 @@ controls:
       - { type: toggle, label: Background, command: background_on, param: "on", state: background.on }
       - { type: select, label: Stream, command: background_stream, param: ndiName, options: state.streams, state: background.ndiName }
       - { type: select, label: Playlist, command: background_playlist, param: playlist, options: state.playlists, state: background.playlist, when: state.playlists }
+      - { type: select, label: Video file, command: background_video, param: video, options: state.videos, state: background.video, when: state.videos }
       - { type: status, label: Signal, state: background.signal }
   - type: group
     repeat: state.audioOutputs
+    unless: settings.noSound
     label: "{{item.name}} (sound)"
     controls:
       - { type: slider, label: Volume (dB), command: audio_volume, param: volumeDb, params: { output: "{{item.id}}" }, state: "audio.{{item.id}}.volumeDb" }
@@ -432,47 +492,106 @@ controls:
       - { type: select, label: Plays, command: audio_source, param: source, params: { output: "{{item.id}}" }, options: state.streams, state: "audio.{{item.id}}.source" }
       - { type: status, label: Problem, state: "audio.{{item.id}}.problem" }
 
-# Example content so the panel has something to show in simulation mode.
+# Simulation mode mirrors the venue: one device per canvas, each with its own wall. A device's
+# Canvas setting picks its state; a device with another canvas (or none) gets the Inside bar.
 simulator:
+  by: canvas
   state:
-    layout: Venue
-    groupList:
-      - id: main-wall
-        name: Main wall
-        activePreset: camera-1-full
-        presets: [{ id: camera-1-full, name: Camera 1 full }, { id: camera-slides, name: Camera + slides }, { id: quad, name: Quad }]
-        "on": true
-        arrangement: two
-        arrangements: [{ id: full, name: One stream, slots: 1 }, { id: two, name: Two side by side, slots: 2 }, { id: quad, name: Four, slots: 4 }]
-        slots:
-          - { slot: 1, name: Left, ndiName: "ZOWIEBOXPRO-54447 (ZowieBox-54447)", playlist: "", video: "", signal: ok }
-          - { slot: 2, name: Right, ndiName: "", playlist: Game day, video: "", signal: ok }
-      - id: double-wide
-        name: Double wide
-        activePreset: ""
-        presets: [{ id: slides-full, name: Slides full }]
-    "groups.main-wall.activePreset": camera-1-full
-    "groups.main-wall.on": true
-    "groups.main-wall.arrangement": two
-    "groups.main-wall.arrangements": [{ id: full, name: One stream, slots: 1 }, { id: two, name: Two side by side, slots: 2 }, { id: quad, name: Four, slots: 4 }]
+    streams:
+      - "APPLE1 (ZowieBoxPro-54399)"
+      - "BOX1 (ZowieBoxPro-54506)"
+      - "BOX2 (ZowieBoxPro-54404)"
+      - "BOX3 (ZowieBoxPro-54447)"
+      - "BOX4 (ZowieBoxPro-54372)"
+      - "CHIVE (ZowieBoxPro-54441)"
     playlists: [{ id: Game day, name: Game day, videos: 2 }]
-    "background.on": false
-    "background.ndiName": ""
-    "background.playlist": Game day
-    "background.signal": ok
-    canvasList: [{ id: canvas-1, name: Inside bar, running: true }, { id: canvas-2, name: Bar tower, running: true }]
-    "groups.main-wall.presets": [{ id: camera-1-full, name: Camera 1 full }, { id: camera-slides, name: Camera + slides }, { id: quad, name: Quad }]
-    "groups.double-wide.activePreset": ""
-    "groups.double-wide.presets": [{ id: slides-full, name: Slides full }]
-    sceneList: [{ id: opening, name: Opening }]
-    layoutList: [{ id: venue, name: Venue, active: true }]
-    streams: ["ZOWIEBOXPRO-54447 (ZowieBox-54447)", "GFX-PC (Slides)"]
-    audioOutputs:
-      - { id: bar, name: Bar speakers, source: "ZOWIEBOXPRO-54447 (ZowieBox-54447)", device: "", channelPair: 0, volumeDb: -6, mute: false, matchWall: true, delayMs: 0, enabled: true }
-      - { id: patio, name: Patio, source: "GFX-PC (Slides)", device: "", channelPair: 1, volumeDb: -12, mute: true, matchWall: true, delayMs: 0, enabled: true }
-    "audio.bar.volumeDb": -6
-    "audio.bar.mute": false
-    "audio.bar.source": "ZOWIEBOXPRO-54447 (ZowieBox-54447)"
-    "audio.patio.volumeDb": -12
-    "audio.patio.mute": true
-    "audio.patio.source": "GFX-PC (Slides)"
+    videos: [{ name: ambient-loop.mp4, kind: video }, { name: promo.mp4, kind: video }]
+    sceneList: []
+    layoutList: []
+    canvasList: [{ id: canvas-1, name: Inside bar, running: true }, { id: canvas-3, name: Ultrawide, running: true }, { id: canvas-4, name: Outside TV, running: true }]
+    # The pieces each split has, for simulated split changes.
+    "sim.slots.full":
+      - { slot: 1, name: Whole, ndiName: "", playlist: "", video: "", signal: empty }
+    "sim.slots.two":
+      - { slot: 1, name: Left, ndiName: "", playlist: "", video: "", signal: empty }
+      - { slot: 2, name: Right, ndiName: "", playlist: "", video: "", signal: empty }
+    "sim.slots.quad":
+      - { slot: 1, name: Top left, ndiName: "", playlist: "", video: "", signal: empty }
+      - { slot: 2, name: Top right, ndiName: "", playlist: "", video: "", signal: empty }
+      - { slot: 3, name: Bottom left, ndiName: "", playlist: "", video: "", signal: empty }
+      - { slot: 4, name: Bottom right, ndiName: "", playlist: "", video: "", signal: empty }
+    "sim.slots.five":
+      - { slot: 1, name: Main, ndiName: "", playlist: "", video: "", signal: empty }
+      - { slot: 2, name: Left top, ndiName: "", playlist: "", video: "", signal: empty }
+      - { slot: 3, name: Left bottom, ndiName: "", playlist: "", video: "", signal: empty }
+      - { slot: 4, name: Right top, ndiName: "", playlist: "", video: "", signal: empty }
+      - { slot: 5, name: Right bottom, ndiName: "", playlist: "", video: "", signal: empty }
+  states:
+    canvas-1: &inside
+      layout: Inside bar
+      groupList:
+        - id: wall
+          name: Centre 2x2
+          arrangements: [{ id: full, name: One stream, slots: 1 }, { id: two, name: Two side by side, slots: 2 }, { id: quad, name: Four, slots: 4 }, { id: five, name: One main and four, slots: 5 }]
+          presets: [{ id: box-1, name: "Box 1" }, { id: box-2, name: "Box 2" }, { id: box-3, name: "Box 3" }, { id: box-4, name: "Box 4" }, { id: chive, name: "Chive" }]
+      "groups.wall.name": Centre 2x2
+      "groups.wall.on": true
+      "groups.wall.arrangement": quad
+      "groups.wall.arrangements": [{ id: full, name: One stream, slots: 1 }, { id: two, name: Two side by side, slots: 2 }, { id: quad, name: Four, slots: 4 }, { id: five, name: One main and four, slots: 5 }]
+      "groups.wall.presets": [{ id: box-1, name: "Box 1" }, { id: box-2, name: "Box 2" }, { id: box-3, name: "Box 3" }, { id: box-4, name: "Box 4" }, { id: chive, name: "Chive" }]
+      "groups.wall.activePreset": ""
+      "groups.wall.slots":
+        - { slot: 1, name: Top left, ndiName: "BOX1 (ZowieBoxPro-54506)", playlist: "", video: "", signal: ok }
+        - { slot: 2, name: Top right, ndiName: "BOX2 (ZowieBoxPro-54404)", playlist: "", video: "", signal: ok }
+        - { slot: 3, name: Bottom left, ndiName: "BOX3 (ZowieBoxPro-54447)", playlist: "", video: "", signal: ok }
+        - { slot: 4, name: Bottom right, ndiName: "BOX4 (ZowieBoxPro-54372)", playlist: "", video: "", signal: ok }
+      "background.on": true
+      "background.ndiName": "CHIVE (ZowieBoxPro-54441)"
+      "background.playlist": ""
+      "background.video": ""
+      "background.signal": ok
+    canvas-3:
+      layout: Ultrawide
+      groupList:
+        - id: wall
+          name: Ultrawide
+          arrangements: [{ id: full, name: One stream, slots: 1 }, { id: two, name: Two side by side, slots: 2 }, { id: quad, name: Four, slots: 4 }, { id: five, name: One main and four, slots: 5 }]
+          presets: [{ id: box-1-box-2, name: "Box 1 + Box 2" }, { id: box-3-box-4, name: "Box 3 + Box 4" }, { id: chive-box-1, name: "Chive + Box 1" }, { id: apple-box-1, name: "Apple + Box 1" }, { id: box-1-main, name: "Box 1 main" }, { id: chive-main, name: "Chive main" }, { id: apple-main, name: "Apple main" }, { id: box-1-centre, name: "Box 1 centre" }, { id: chive-wide, name: "Chive wide" }, { id: video, name: "Video" }]
+      "groups.wall.name": Ultrawide
+      "groups.wall.on": true
+      "groups.wall.arrangement": five
+      "groups.wall.arrangements": [{ id: full, name: One stream, slots: 1 }, { id: two, name: Two side by side, slots: 2 }, { id: quad, name: Four, slots: 4 }, { id: five, name: One main and four, slots: 5 }]
+      "groups.wall.presets": [{ id: box-1-box-2, name: "Box 1 + Box 2" }, { id: box-3-box-4, name: "Box 3 + Box 4" }, { id: chive-box-1, name: "Chive + Box 1" }, { id: apple-box-1, name: "Apple + Box 1" }, { id: box-1-main, name: "Box 1 main" }, { id: chive-main, name: "Chive main" }, { id: apple-main, name: "Apple main" }, { id: box-1-centre, name: "Box 1 centre" }, { id: chive-wide, name: "Chive wide" }, { id: video, name: "Video" }]
+      "groups.wall.activePreset": ""
+      "groups.wall.slots":
+        - { slot: 1, name: Main, ndiName: "BOX1 (ZowieBoxPro-54506)", playlist: "", video: "", signal: ok }
+        - { slot: 2, name: Left top, ndiName: "BOX2 (ZowieBoxPro-54404)", playlist: "", video: "", signal: ok }
+        - { slot: 3, name: Left bottom, ndiName: "BOX3 (ZowieBoxPro-54447)", playlist: "", video: "", signal: ok }
+        - { slot: 4, name: Right top, ndiName: "BOX4 (ZowieBoxPro-54372)", playlist: "", video: "", signal: ok }
+        - { slot: 5, name: Right bottom, ndiName: "CHIVE (ZowieBoxPro-54441)", playlist: "", video: "", signal: ok }
+      "background.on": false
+      "background.ndiName": ""
+      "background.playlist": ""
+      "background.video": ""
+      "background.signal": empty
+    canvas-4:
+      layout: Outside TV
+      groupList:
+        - id: wall
+          name: outside tv
+          arrangements: [{ id: full, name: One stream, slots: 1 }, { id: two, name: Two side by side, slots: 2 }, { id: quad, name: Four, slots: 4 }, { id: five, name: One main and four, slots: 5 }]
+          presets: [{ id: box-1, name: "Box 1" }, { id: box-2, name: "Box 2" }, { id: box-3, name: "Box 3" }, { id: box-4, name: "Box 4" }, { id: chive, name: "Chive" }, { id: apple, name: "Apple" }]
+      "groups.wall.name": outside tv
+      "groups.wall.on": true
+      "groups.wall.arrangement": full
+      "groups.wall.arrangements": [{ id: full, name: One stream, slots: 1 }, { id: two, name: Two side by side, slots: 2 }, { id: quad, name: Four, slots: 4 }, { id: five, name: One main and four, slots: 5 }]
+      "groups.wall.presets": [{ id: box-1, name: "Box 1" }, { id: box-2, name: "Box 2" }, { id: box-3, name: "Box 3" }, { id: box-4, name: "Box 4" }, { id: chive, name: "Chive" }, { id: apple, name: "Apple" }]
+      "groups.wall.activePreset": "box-1"
+      "groups.wall.slots":
+        - { slot: 1, name: Whole, ndiName: "BOX1 (ZowieBoxPro-54506)", playlist: "", video: "", signal: ok }
+      "background.on": false
+      "background.ndiName": ""
+      "background.playlist": ""
+      "background.video": ""
+      "background.signal": empty
+    "": *inside

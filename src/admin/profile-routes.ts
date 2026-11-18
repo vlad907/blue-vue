@@ -167,8 +167,9 @@ export function registerProfileRoutes(admin: FastifyInstance, engine: Engine) {
       return {
         simulated: true,
         canvases: [
-          { id: "canvas-1", name: "Inside bar", running: true, error: "", walls: [{ id: "main-wall", name: "Main wall", presets: 3 }, { id: "double-wide", name: "Double wide", presets: 1 }], existing: used("canvas-1") },
-          { id: "canvas-2", name: "Bar tower", running: true, error: "", walls: [{ id: "tower", name: "Tower", presets: 2 }], existing: used("canvas-2") },
+          { id: "canvas-1", name: "Inside bar", running: true, error: "", walls: [{ id: "wall", name: "Centre 2x2", presets: 5 }], existing: used("canvas-1") },
+          { id: "canvas-3", name: "Ultrawide", running: true, error: "", walls: [{ id: "wall", name: "Ultrawide", presets: 10 }], existing: used("canvas-3") },
+          { id: "canvas-4", name: "Outside TV", running: true, error: "", walls: [{ id: "wall", name: "outside tv", presets: 6 }], existing: used("canvas-4") },
         ],
       };
     }

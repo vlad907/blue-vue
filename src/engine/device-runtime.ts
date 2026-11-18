@@ -52,7 +52,11 @@ export class DeviceRuntime extends EventEmitter {
     super();
     this.conn = factory(profile, { ...device.settings }, device.location);
     // Example state is for simulation only; real devices start empty until they report.
-    if (this.conn instanceof SimulatedConnection) Object.assign(this.state, structuredClone(profile.simulator.state ?? {}));
+    if (this.conn instanceof SimulatedConnection) {
+      const sim = profile.simulator;
+      const variant = sim.by ? (sim.states[String(device.settings[sim.by] ?? "")] ?? sim.states[""]) : undefined;
+      Object.assign(this.state, structuredClone({ ...sim.state, ...variant }));
+    }
     this.conn.on("log", (dir, text) => this.addLog(dir, text));
     this.conn.on("data", (msg: string) => this.applyUpdates(applyRules(this.profile.feedback, msg, this.context())));
     this.conn.on("status", (online: boolean) => this.onStatus(online));
@@ -85,9 +89,11 @@ export class DeviceRuntime extends EventEmitter {
     const values = validateParams(cmd, params);
     const ctx = { ...this.context(), ...values, params: values };
     await this.runSteps(cmd.steps, ctx, depth, cmd.parse);
-    if (cmd.sets) {
+    // A simulated device also gets what the real one would have reported back.
+    const sets = { ...cmd.sets, ...(this.conn instanceof SimulatedConnection ? cmd.simulatorSets : undefined) };
+    if (Object.keys(sets).length) {
       const updates: StateUpdates = {};
-      for (const [k, v] of Object.entries(cmd.sets)) updates[render(k, ctx)] = renderValue(v, ctx);
+      for (const [k, v] of Object.entries(sets)) updates[render(k, ctx)] = renderValue(v, ctx);
       this.applyUpdates(updates);
     }
   }

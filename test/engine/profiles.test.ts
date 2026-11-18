@@ -628,6 +628,7 @@ test("mosaic engine profile: splits a wall, fills its slots, switches content an
         if (url.pathname === "/api/canvases") return send(200, { canvases: [{ id: "canvas-1", name: "Inside bar", running: true, error: "" }, { id: "canvas-2", name: "Bar tower", running: false, error: "lost its GPU" }] });
         if (url.pathname === "/api/layout") return send(200, { audioOutputs: [] });
         if (url.pathname === "/api/audio") return send(200, { outputs: [] });
+        if (url.pathname === "/api/media") return send(200, { folder: "C:/media", files: [{ name: "logo.png", bytes: 10, kind: "image" }, { name: "ambient.mp4", bytes: 20, kind: "video" }, { name: "promo.mov", bytes: 30, kind: "video" }] });
         return send(404, { error: "not found" });
       }
       const body = JSON.parse(raw || "{}");
@@ -648,7 +649,7 @@ test("mosaic engine profile: splits a wall, fills its slots, switches content an
       if (url.pathname === "/api/walls/ultrawide/content") { wall.on = body.on; return send(200, {}); }
       if (url.pathname === "/api/walls/ultrawide/presets") { wall.presets.push({ id: String(body.name).toLowerCase().replace(/ /g, "-"), name: body.name }); return send(201, {}); }
       if (url.pathname === "/api/background") {
-        if (body.ndiName || body.playlist) Object.assign(background, fill(body), { chosen: true, signal: "ok" });
+        if (body.ndiName || body.playlist || body.video) Object.assign(background, fill(body), { video: body.video ?? "", chosen: true, signal: "ok" });
         background.on = body.on ?? true;
         return send(200, background);
       }
@@ -683,7 +684,7 @@ test("mosaic engine profile: splits a wall, fills its slots, switches content an
     await manager.execute("m", "slot_playlist", { group: "ultrawide", slot: 1, playlist: "Game day" });
     assert.deepEqual(slots().map((s) => [s.ndiName, s.playlist]), [["", "Game day"], ["PC (Cam 2)", ""]]);
     await manager.execute("m", "slot_empty", { group: "ultrawide", slot: 2 });
-    assert.deepEqual(requests.at(-1)!.body, { transitionMs: 500 });
+    assert.deepEqual(requests.at(-1), { method: "POST", path: "/api/walls/ultrawide/slots/2", body: {} });
     assert.equal(slots()[1].ndiName, "");
     await assert.rejects(manager.execute("m", "slot_stream", { group: "ultrawide", slot: 3, ndiName: "PC (Cam 2)" }), /HTTP 400/);
 
@@ -705,11 +706,75 @@ test("mosaic engine profile: splits a wall, fills its slots, switches content an
     await manager.execute("m", "background_stream", { ndiName: "PC (Cam 1)" });
     assert.equal(st()["background.ndiName"], "PC (Cam 1)");
 
+    // One video file as the background. The picker offers the media folder's videos, not its pictures.
+    await until(() => Array.isArray(st().videos));
+    assert.deepEqual((st().videos as { name: string }[]).map((v) => v.name), ["ambient.mp4", "promo.mov"]);
+    await manager.execute("m", "background_video", { video: "ambient.mp4" });
+    assert.deepEqual(requests.at(-1), { method: "POST", path: "/api/background", body: { video: "ambient.mp4", on: true, transitionMs: 1000 } });
+    assert.deepEqual([st()["background.video"], st()["background.ndiName"], st()["background.on"]], ["ambient.mp4", "", true]);
+
     await manager.execute("m", "identify_screens", { endpoint: "wall-pc-1" });
     assert.deepEqual(identify, [{ on: true }]);
   } finally {
     cleanup();
     engine.close();
+  }
+});
+
+test("simulated mosaic engines differ per canvas and react to splits, slots, content and the background", async () => {
+  const { manager, state, cleanup } = setup([], true);
+  try {
+    const dev = (id: string, canvas?: string) => ({ id, name: id, profile: "mosaic-engine", settings: { host: "10.0.10.60", ...(canvas ? { canvas } : {}) } });
+    manager.apply(site({ devices: [dev("inside", "canvas-1"), dev("ultra", "canvas-3"), dev("outside", "canvas-4"), dev("other", "canvas-9"), dev("plain")] }));
+    const st = (id: string) => state.state.devices[id].state;
+    const slots = (id: string) => (st(id)["groups.wall.slots"] as { slot: number; name: string; ndiName: string; playlist: string; signal: string }[]);
+    const names = (id: string) => slots(id).map((s) => s.name);
+
+    // Each canvas has its own wall; a canvas the profile doesn't list, or none, gets the first.
+    assert.deepEqual(["inside", "ultra", "outside"].map((id) => [(st(id).groupList as { name: string }[])[0].name, st(id)["groups.wall.arrangement"], slots(id).length]), [["Centre 2x2", "quad", 4], ["Ultrawide", "five", 5], ["outside tv", "full", 1]]);
+    assert.deepEqual(names("inside"), ["Top left", "Top right", "Bottom left", "Bottom right"]);
+    assert.deepEqual(names("ultra"), ["Main", "Left top", "Left bottom", "Right top", "Right bottom"]);
+    assert.deepEqual((st("ultra")["groups.wall.presets"] as { id: string }[]).map((p) => p.id), ["box-1-box-2", "box-3-box-4", "chive-box-1", "apple-box-1", "box-1-main", "chive-main", "apple-main", "box-1-centre", "chive-wide", "video"]);
+    assert.deepEqual([st("inside")["background.on"], st("ultra")["background.on"]], [true, false]);
+    assert.equal((st("other").groupList as { name: string }[])[0].name, "Centre 2x2");
+    assert.equal((st("plain").groupList as { name: string }[])[0].name, "Centre 2x2");
+    assert.equal((st("inside").streams as string[]).length, 6);
+
+    // One quadrant changes; the others and the other canvases are untouched.
+    const before = slots("ultra");
+    await manager.execute("inside", "slot_stream", { group: "wall", slot: 3, ndiName: "APPLE1 (ZowieBoxPro-54399)" });
+    assert.deepEqual(slots("inside").map((s) => s.ndiName), ["BOX1 (ZowieBoxPro-54506)", "BOX2 (ZowieBoxPro-54404)", "APPLE1 (ZowieBoxPro-54399)", "BOX4 (ZowieBoxPro-54372)"]);
+    assert.deepEqual(slots("ultra"), before);
+    await manager.execute("inside", "slot_playlist", { group: "wall", slot: 4, playlist: "Game day" });
+    assert.deepEqual([slots("inside")[3].ndiName, slots("inside")[3].playlist], ["", "Game day"]);
+    await manager.execute("inside", "slot_empty", { group: "wall", slot: 2 });
+    assert.deepEqual([slots("inside")[1].ndiName, slots("inside")[1].signal], ["", "empty"]);
+    await assert.rejects(manager.execute("inside", "slot_stream", { group: "wall", slot: 9, ndiName: "x" }), /no item with slot "9"/);
+
+    // A new split keeps what the same-numbered pieces played.
+    await manager.execute("inside", "arrange", { group: "wall", arrangement: "two" });
+    assert.equal(st("inside")["groups.wall.arrangement"], "two");
+    assert.deepEqual(slots("inside").map((s) => [s.name, s.ndiName]), [["Left", "BOX1 (ZowieBoxPro-54506)"], ["Right", ""]]);
+    // One stream across the whole wall.
+    await manager.execute("inside", "show_stream", { group: "wall", ndiName: "CHIVE (ZowieBoxPro-54441)" });
+    assert.equal(st("inside")["groups.wall.arrangement"], "full");
+    assert.deepEqual(slots("inside").map((s) => [s.name, s.ndiName]), [["Whole", "CHIVE (ZowieBoxPro-54441)"]]);
+
+    await manager.execute("inside", "content", { group: "wall", on: false });
+    assert.equal(st("inside")["groups.wall.on"], false);
+    await manager.execute("inside", "recall_preset", { group: "wall", preset: "box-2" });
+    assert.deepEqual([st("inside")["groups.wall.on"], st("inside")["groups.wall.activePreset"]], [true, "box-2"]);
+
+    // The background changes without touching the wall.
+    const wall = slots("inside");
+    await manager.execute("inside", "background_stream", { ndiName: "BOX3 (ZowieBoxPro-54447)" });
+    await manager.execute("inside", "background_video", { video: "promo.mp4" });
+    assert.deepEqual([st("inside")["background.video"], st("inside")["background.ndiName"], st("inside")["background.on"]], ["promo.mp4", "", true]);
+    await manager.execute("inside", "background_on", { on: false });
+    assert.equal(st("inside")["background.on"], false);
+    assert.deepEqual(slots("inside"), wall);
+  } finally {
+    cleanup();
   }
 });
 

@@ -2,6 +2,8 @@
 //   {{path}}                     value from the context (params, settings, state, item)
 //   {{path | filter:arg:arg}}    filters run left to right
 //   {{path | filter:@other.path}} an argument starting with @ is read from the context
+//   {{state.groups.[group].slots}} [name] in a path is replaced by that value first, so a
+//                                state key that contains a param can be read
 // There is deliberately no expression evaluation: profiles are written by
 // technicians in the admin UI, so only these fixed filters are available.
 
@@ -57,6 +59,18 @@ export const FILTERS: Record<string, Filter> = {
     }
     return v.map((it) => (it && typeof it === "object" && String((it as Record<string, unknown>)[key]) === String(match) ? { ...it, [field]: value } : it));
   },
+  // carry:key:@from:fieldA,fieldB — a copy of a list where each item takes the named fields from
+  // the item of `from` with the same key. For a new list that should keep what an old one held,
+  // e.g. the slots of a wall after its split changes (slot 1 keeps playing what it played).
+  carry: (v, key, from, fields = "") => {
+    if (!Array.isArray(v)) throw new Error("carry: there is no list to fill");
+    const old = Array.isArray(from) ? (from as Record<string, unknown>[]) : [];
+    const names = String(fields).split(",").map((f) => f.trim()).filter(Boolean);
+    return v.map((it) => {
+      const match = old.find((o) => o && typeof o === "object" && String(o[key]) === String((it as Record<string, unknown>)?.[key]));
+      return match ? { ...(it as object), ...Object.fromEntries(names.filter((n) => n in match).map((n) => [n, match[n]])) } : it;
+    });
+  },
 };
 
 export function isTruthy(v: unknown) {
@@ -81,14 +95,19 @@ export function lookup(ctx: Context, path: string): unknown {
 
 const TAG = /\{\{\s*([^}]*?)\s*\}\}/g;
 
+/** Looks up a path after filling in its [name] parts: "state.groups.[group].slots" with group "wall" reads "state.groups.wall.slots". */
+function lookupPath(ctx: Context, path: string): unknown {
+  return lookup(ctx, path.replace(/\[([\w.]+)\]/g, (_, name: string) => String(lookup(ctx, name) ?? "")));
+}
+
 function evaluate(expr: string, ctx: Context): unknown {
   const [path, ...filters] = splitPipes(expr);
-  let value: unknown = /^-?\d+(\.\d+)?$/.test(path) ? Number(path) : /^"(.*)"$/.test(path) ? path.slice(1, -1) : lookup(ctx, path);
+  let value: unknown = /^-?\d+(\.\d+)?$/.test(path) ? Number(path) : /^"(.*)"$/.test(path) ? path.slice(1, -1) : lookupPath(ctx, path);
   for (const f of filters) {
     const [name, ...raw] = f.split(":");
     const fn = FILTERS[name.trim()];
     if (!fn) throw new Error(`Unknown filter "${name.trim()}" (available: ${Object.keys(FILTERS).join(", ")})`);
-    const args = raw.map((a) => (a.trim().startsWith("@") ? lookup(ctx, a.trim().slice(1)) : a));
+    const args = raw.map((a) => (a.trim().startsWith("@") ? lookupPath(ctx, a.trim().slice(1)) : a));
     value = fn(value, ...args);
   }
   return value;
