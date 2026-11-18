@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer as createHttpServer } from "node:http";
 import { createServer as createTcpServer, type Socket } from "node:net";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { identityStore, resetIdentity } from "../../agent/src/transports/androidtv/cert.ts";
@@ -284,6 +284,61 @@ test("turning a wall on wakes a TV that keeps dropping its connection, then sele
   } finally {
     cleanup();
     tv.stop();
+  }
+});
+
+test("a TV comes back on the input it was left on, also after the server restarts", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "bv-inputs-"));
+  const inputsFile = join(dir, "data", "last-inputs.json");
+  const lib = new ProfileLibrary(BUILTIN, join(dir, "profiles")).load();
+  const start = () => {
+    const state = new StateStore();
+    return { state, manager: new DeviceManager(lib, state, { simulate: true, timing: { inputAfterOnMs: 20, inputAgainMs: 20 }, inputsFile }) };
+  };
+  const venue = (ids: string[]) => site({
+    devices: ids.map((id) => ({ id, name: id, profile: "tcl-roku-tv", settings: { host: "10.0.0.1" } })),
+    groups: [{ id: "bar", name: "Bar", kind: "wall", devices: ids, staggerMs: 0, powerOnInput: "hdmi1" }],
+  });
+  let { state, manager } = start();
+  try {
+    manager.apply(venue(["tv1", "tv2", "tv3"]));
+    const input = (id: string) => state.state.devices[id].state.input;
+    // Staff put two TVs on other inputs: one from its own card, one through the capability.
+    await manager.execute("tv1", "input", { input: "hdmi3" });
+    await manager.capability("tv2", "source", "select", "hdmi2");
+    assert.equal(manager.lastInput("tv1")!.input, "hdmi3");
+    assert.ok(Date.parse(manager.lastInput("tv1")!.at) > Date.now() - 5000);
+    assert.equal(manager.lastInput("tv3"), undefined);
+
+    await manager.groupCapability("bar", "power", "off");
+    const sent = (id: string) => manager.runtime(id).log.filter((e) => e.dir === "tx" && e.text.includes("InputHDMI")).map((e) => /InputHDMI\d/.exec(e.text)![0]);
+    const before = sent("tv1").length;
+    await manager.groupCapability("bar", "power", "on");
+    await until(() => sent("tv1").length === before + 2 && sent("tv3").length === 2);
+    // Each TV is sent its own input again (twice: a TV that's still waking can miss the first).
+    assert.deepEqual(sent("tv1").slice(before), ["InputHDMI3", "InputHDMI3"]);
+    assert.deepEqual(sent("tv2").slice(-2), ["InputHDMI2", "InputHDMI2"]);
+    assert.deepEqual(sent("tv3"), ["InputHDMI1", "InputHDMI1"]);
+    assert.deepEqual([input("tv1"), input("tv2"), input("tv3")], ["hdmi3", "hdmi2", "hdmi1"]);
+    // tv3 only got its wall's default, which isn't remembered, so it follows a new default.
+    assert.equal(manager.lastInput("tv3"), undefined);
+    manager.apply({ ...venue(["tv1", "tv2", "tv3"]), groups: [{ id: "bar", name: "Bar", kind: "wall", devices: ["tv1", "tv2", "tv3"], staggerMs: 0, powerOnInput: "hdmi4" }] } as Site);
+    assert.deepEqual(["tv1", "tv2", "tv3"].map((id) => manager.powerOnInput(id)), ["hdmi3", "hdmi2", "hdmi4"]);
+    manager.stopAll();
+
+    // The server restarts: the inputs are still known, shown on the panel and used at power-on.
+    ({ state, manager } = start());
+    manager.apply(venue(["tv1", "tv2", "tv3"]));
+    assert.deepEqual([state.state.devices.tv1.state.input, state.state.devices.tv2.state.input], ["hdmi3", "hdmi2"]);
+    await manager.capability("tv1", "power", "on");
+    assert.equal(state.state.devices.tv1.state.input, "hdmi3");
+
+    // A removed TV is forgotten, so a new device with its id doesn't inherit the input.
+    manager.apply(venue(["tv2", "tv3"]));
+    assert.deepEqual(Object.keys(JSON.parse(readFileSync(inputsFile, "utf8"))), ["tv2"]);
+  } finally {
+    manager.stopAll();
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

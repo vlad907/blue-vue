@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import type { StateStore } from "../state.ts";
 import { CommandError, type ConnectionFactory, type DeviceConfig, DeviceRuntime, defaultFactory } from "./device-runtime.ts";
 import type { Capabilities, Profile, SettingField } from "./profile-schema.ts";
@@ -35,8 +37,19 @@ export class DeviceManager {
   private site?: Site;
   private factory: ConnectionFactory;
   private timing: PowerOnTiming;
+  /** The input each TV was last switched to through Blue Vue, kept across restarts. */
+  private lastInputs: Record<string, { input: string; at: string }> = {};
 
-  constructor(private profiles: ProfileLibrary, private state: StateStore, private opts: { simulate: boolean; factory?: ConnectionFactory; timing?: Partial<PowerOnTiming> }) {
+  constructor(
+    private profiles: ProfileLibrary,
+    private state: StateStore,
+    private opts: { simulate: boolean; factory?: ConnectionFactory; timing?: Partial<PowerOnTiming>; /** Where last inputs are kept. Not kept without it. */ inputsFile?: string },
+  ) {
+    try {
+      if (opts.inputsFile && existsSync(opts.inputsFile)) this.lastInputs = JSON.parse(readFileSync(opts.inputsFile, "utf8").replace(/^\uFEFF/, ""));
+    } catch (err) {
+      console.error(`[devices] couldn't read ${opts.inputsFile}; starting without remembered inputs: ${err instanceof Error ? err.message : err}`);
+    }
     this.factory = opts.factory ?? defaultFactory(opts.simulate);
     // Simulated TVs wake at once, so the panel stays snappy in simulation.
     this.timing = { powerOnTries: 8, powerOnRetryMs: 2500, inputAfterOnMs: opts.simulate ? 200 : 4000, inputAgainMs: opts.simulate ? 200 : 6000, ...opts.timing };
@@ -52,6 +65,9 @@ export class DeviceManager {
     this.state.update((s) => {
       for (const id of Object.keys(s.devices)) if (!wanted.has(id)) delete s.devices[id];
     });
+    const forgotten = Object.keys(this.lastInputs).filter((id) => !wanted.has(id));
+    for (const id of forgotten) delete this.lastInputs[id];
+    if (forgotten.length) this.saveInputs();
 
     for (const device of site.devices) {
       const profile = this.profiles.get(device.profile);
@@ -83,6 +99,10 @@ export class DeviceManager {
       return fail(err instanceof Error ? err.message : String(err));
     }
     this.runtimes.set(device.id, rt);
+    // A TV that doesn't report its input shows the one it was last switched to, also after a restart.
+    const inputKey = (profile.capabilities.source as { state?: string } | undefined)?.state;
+    const remembered = this.lastInputs[device.id]?.input;
+    if (inputKey && remembered && rt.state[inputKey] === undefined) rt.state[inputKey] = remembered;
     this.state.update((s) => void (s.devices[device.id] = { ...base, state: { ...rt.state } }));
     rt.on("state", (changed) => this.state.update((s) => Object.assign(s.devices[device.id].state, changed)));
     rt.on("status", (online: boolean) =>
@@ -115,8 +135,36 @@ export class DeviceManager {
     throw Object.assign(new CommandError(`Unknown device "${id}"`), { statusCode: 404 });
   }
 
-  execute(deviceId: string, command: string, params: Record<string, unknown> = {}) {
-    return this.runtime(deviceId).execute(command, params);
+  async execute(deviceId: string, command: string, params: Record<string, unknown> = {}) {
+    const rt = this.runtime(deviceId);
+    await rt.execute(command, params);
+    // Selecting an input, from anywhere (a wall card, a room card, a scene), is what gets remembered.
+    const src = rt.profile.capabilities.source as { select?: string; param?: string } | undefined;
+    const input = src?.param ? params[src.param] : undefined;
+    if (src?.select === command && input !== undefined && input !== "") this.rememberInput(deviceId, String(input));
+  }
+
+  /** The input a TV was last switched to through Blue Vue, and when. */
+  lastInput(deviceId: string): { input: string; at: string } | undefined {
+    return this.lastInputs[deviceId];
+  }
+
+  private rememberInput(deviceId: string, input: string) {
+    if (this.lastInputs[deviceId]?.input === input) return;
+    this.lastInputs[deviceId] = { input, at: new Date().toISOString() };
+    this.saveInputs();
+  }
+
+  private saveInputs() {
+    const file = this.opts.inputsFile;
+    if (!file) return;
+    try {
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(`${file}.tmp`, JSON.stringify(this.lastInputs, null, 2) + "\n");
+      renameSync(`${file}.tmp`, file); // never a half-written file
+    } catch (err) {
+      console.error(`[devices] couldn't save ${file}: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   /** Runs a command on every device in a group, started one after another, and reports failures per device. */
@@ -132,7 +180,7 @@ export class DeviceManager {
     const def = rt.profile.capabilities[cap] as Record<string, string> | undefined;
     if (!def?.[action]) throw new CommandError(`${rt.device.name} doesn't support ${cap}.${action}`);
     const params = def.param !== undefined && value !== undefined ? { [def.param]: value } : {};
-    if (cap !== "power" || action !== "on") return void (await rt.execute(def[action], params));
+    if (cap !== "power" || action !== "on") return void (await this.execute(deviceId, def[action], params));
 
     // A TV in standby often drops its connection for a few seconds at a time
     // (Fire TVs do), so "on" keeps trying for a while instead of failing on the first miss.
@@ -149,8 +197,14 @@ export class DeviceManager {
     await this.selectPowerOnInput(deviceId);
   }
 
-  /** The input a TV should show after it's turned on: its own setting, else its wall's. */
+  /**
+   * The input a TV should show after it's turned on: the one it was last
+   * switched to, so it comes back as it was left. A TV nobody has switched yet
+   * uses its own setting, else its wall's.
+   */
   powerOnInput(deviceId: string): string | undefined {
+    const last = this.lastInputs[deviceId]?.input;
+    if (last) return last;
     const own = this.site?.devices.find((d) => d.id === deviceId)?.settings.powerOnInput;
     if (own) return String(own);
     return this.site?.groups.find((g) => g.kind === "wall" && g.powerOnInput && g.devices.includes(deviceId))?.powerOnInput;
@@ -165,6 +219,8 @@ export class DeviceManager {
     const rt = this.runtimes.get(deviceId);
     const src = rt?.profile.capabilities.source as { select?: string; param?: string } | undefined;
     if (!input || !rt || !src?.select || !src.param) return;
+    // Sent straight to the TV, not through execute(): this isn't somebody choosing an input, so it
+    // isn't remembered, and a TV that's only ever had its wall's default follows a change of that default.
     const select = () => rt.execute(src.select!, { [src.param!]: input });
     await sleep(this.timing.inputAfterOnMs);
     try {

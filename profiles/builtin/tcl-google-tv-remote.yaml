@@ -24,7 +24,7 @@ transport:
 settings:
   - { key: host, label: IP address, type: string, required: true }
   - { key: mac, label: MAC address, type: string, help: "Optional. Used for wake-on-LAN when the TV has dropped off the network in standby" }
-  - { key: powerOnInput, label: Input when turned on, type: enum, values: [hdmi1, hdmi2, hdmi3, hdmi4], help: "Optional. Switches to this HDMI input each time Blue Vue turns the TV on. Blank uses the wall's choice (Video walls page)" }
+  - { key: powerOnInput, label: Input when turned on, type: enum, values: [hdmi1, hdmi2, hdmi3, hdmi4], help: "Optional. The input this TV goes to when Blue Vue turns it on, until someone picks an input for it. After that it returns to the input it was last on. Blank uses the wall's choice (Video walls page)" }
 
 commands:
   power_on:

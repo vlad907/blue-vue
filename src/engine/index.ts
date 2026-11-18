@@ -36,7 +36,7 @@ export function startEngine(dataDir: string, state: StateStore, simulate: boolea
   let site = store.load();
   const agents = new AgentHub(() => site.agents, state, simulate);
   const factory = defaultFactory(simulate, (agent, profile, settings) => agents.connection(agent, profile.transport, settings));
-  const devices = new DeviceManager(profiles, state, { simulate, factory });
+  const devices = new DeviceManager(profiles, state, { simulate, factory, inputsFile: join(dataDir, "last-inputs.json") });
   devices.apply(site);
   console.log(`[engine] ${site.devices.length} devices from ${store.file}${simulate ? " (simulated)" : ""}`);
 

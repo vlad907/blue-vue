@@ -114,7 +114,7 @@ export function Groups() {
                     <Num value={g.columns} integer min={1} max={16} onChange={(v) => set((x) => { x.columns = v; })} />
                   </Field>
                   {g.kind === "wall" && (
-                    <Field label="Input when turned on" help="On and All on wake each TV, then switch it to this input. One TV can differ: set it on that device.">
+                    <Field label="Input when turned on" help="Where a TV goes when it's turned on, until someone picks an input for it. After that each TV returns to the input it was last on.">
                       <Pick
                         value={g.powerOnInput}
                         empty="Leave the input alone"

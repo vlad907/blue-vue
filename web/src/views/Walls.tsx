@@ -10,7 +10,6 @@ export function Walls() {
   const walls = ui.groups.filter((g) => g.kind === "wall");
   const layoutDevices = ui.devices.filter((d) => ui.profiles[d.profile]?.capabilities.layoutPresets);
   const linked = (deviceId: string) => new Set(walls.filter((w) => w.mosaic?.device === deviceId).map((w) => w.mosaic!.group));
-  const inputs = inputChoices(ui.devices.filter((d) => walls.some((w) => w.devices.includes(d.id))), ui.profiles);
 
   const everyWall = (label: string, run: (w: Wall) => Promise<unknown>) =>
     act(async () => {
@@ -27,11 +26,7 @@ export function Walls() {
           <div className="row">
             <button className="btn on" onClick={() => everyWall("All walls on", (w) => api.groupCapability(w.id, "power", "on"))}>All on</button>
             <button className="btn off" onClick={() => everyWall("All walls off", (w) => api.groupCapability(w.id, "power", "off"))}>All off</button>
-            {inputs.map((o) => (
-              <button key={String(o.value)} className="btn" onClick={() => everyWall(`All TVs to ${o.label}`, (w) => api.groupCapability(w.id, "source", "select", o.value))}>
-                All {o.label}
-              </button>
-            ))}
+            {/* No "all TVs to one input" here on purpose: walls use different inputs, and each TV returns to its own when turned on. */}
           </div>
         </>
       )}
