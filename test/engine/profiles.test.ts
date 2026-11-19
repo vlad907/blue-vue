@@ -562,7 +562,7 @@ test("mosaic engine profile: reads walls and presets live, recalls with the API 
     await manager.execute("mosaic", "show_stream", { group: "double-wide", ndiName: 'GFX-PC (Slides) "B"' });
     assert.deepEqual(JSON.parse(requests.find((r) => r.path === "/api/walls/double-wide/show")!.body), { ndiName: 'GFX-PC (Slides) "B"', transitionMs: 500 });
 
-    await assert.rejects(manager.execute("mosaic", "recall_preset", { group: "main-wall", preset: "nope" }), /HTTP 404/);
+    await assert.rejects(manager.execute("mosaic", "recall_preset", { group: "main-wall", preset: "nope" }), /HTTP 404 Not Found: no such preset in group 'main-wall'/); // the engine's own reason is shown
 
     // Sound: one value of one output changes; the rest of the list goes back as it was, including
     // a change someone made in the editor a moment ago.
@@ -686,7 +686,7 @@ test("mosaic engine profile: splits a wall, fills its slots, switches content an
     await manager.execute("m", "slot_empty", { group: "ultrawide", slot: 2 });
     assert.deepEqual(requests.at(-1), { method: "POST", path: "/api/walls/ultrawide/slots/2", body: {} });
     assert.equal(slots()[1].ndiName, "");
-    await assert.rejects(manager.execute("m", "slot_stream", { group: "ultrawide", slot: 3, ndiName: "PC (Cam 2)" }), /HTTP 400/);
+    await assert.rejects(manager.execute("m", "slot_stream", { group: "ultrawide", slot: 3, ndiName: "PC (Cam 2)" }), /HTTP 400 Bad Request: no slot 3/);
 
     await manager.execute("m", "content", { group: "ultrawide", on: false });
     assert.deepEqual(requests.at(-1)!.body, { on: false, transitionMs: 500 });
@@ -787,7 +787,7 @@ test("mosaic engine without the API key is refused (401) and says so", async () 
   const { manager, cleanup } = setup();
   try {
     manager.apply(site({ devices: [{ id: "m", name: "M", profile: "mosaic-engine", settings: { host: "127.0.0.1", port: (engine.address() as { port: number }).port } }] }));
-    await assert.rejects(manager.execute("m", "clear", { group: "main-wall" }), /HTTP 401/);
+    await assert.rejects(manager.execute("m", "clear", { group: "main-wall" }), /HTTP 401 Unauthorized: API key required/);
   } finally {
     cleanup();
     engine.close();

@@ -39,7 +39,7 @@ export class HttpConnection extends Connection {
       if (res.status === 403 && this.base.endsWith(":8060")) {
         throw new Error(`HTTP 403: the Roku refused. On the TV set Settings > System > Advanced system settings > Control by mobile apps > Network access to Default or Permissive`);
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}${reason(text)}`);
       if (text) this.log("rx", text.length > 500 ? text.slice(0, 500) + "…" : text);
       return text;
     } catch (err) {
@@ -245,6 +245,19 @@ export function broadcastAddresses(): string[] {
 }
 
 /** Stand-in used in simulation mode: logs what would be sent. */
+/** Why a device refused a request, when it says: the "error" or "message" of a JSON reply, or a short plain one. */
+function reason(body: string): string {
+  const text = body.trim();
+  if (!text) return "";
+  try {
+    const j = JSON.parse(text) as { error?: unknown; message?: unknown };
+    const why = typeof j.error === "string" ? j.error : typeof j.message === "string" ? j.message : "";
+    return why ? `: ${why.slice(0, 200)}` : "";
+  } catch {
+    return text.length <= 120 && !text.startsWith("<") ? `: ${text}` : "";
+  }
+}
+
 export class SimulatedConnection extends Connection {
   sent: RenderedPayload[] = [];
   open() {
