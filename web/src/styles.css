@@ -191,6 +191,14 @@ button.small { padding: 4px 10px; font-size: 13px; border-radius: 8px; border: 1
 .piece small { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
 .piece b { font-size: clamp(14px, 2.2vw, 26px); overflow-wrap: anywhere; line-height: 1.1; }
 .piece em { font-style: normal; font-size: 12px; color: var(--warn); }
+/* A piece showing a stream gets its live picture behind the labels. */
+.piece .preview { position: absolute; inset: 0; aspect-ratio: auto; border: 0; border-radius: 0; background: none; z-index: 0; pointer-events: none; }
+.backdrop .preview { width: 112px; flex: none; border-radius: 6px; }
+.piece .preview img { object-fit: cover; }
+.piece.live small, .piece.live b, .piece.live em { position: relative; z-index: 1; padding: 2px 8px; border-radius: 6px; background: rgba(5, 8, 15, .68); }
+.piece.live small { color: #d5def0; }
+.piece.live b { font-size: clamp(12px, 1.5vw, 18px); }
+.piece.live { justify-content: flex-end; align-items: flex-start; gap: 3px; }
 .piece.empty { background: #070b14; }
 .piece.empty b { color: var(--muted); font-weight: 500; }
 .piece.selected { border: 3px solid var(--accent); background: rgba(59,130,246,.22); z-index: 1; }

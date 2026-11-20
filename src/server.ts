@@ -10,6 +10,7 @@ import type { Engine } from "./engine/index.ts";
 import type { Capabilities } from "./engine/profile-schema.ts";
 import type { GracenoteGuide } from "./guide/gracenote.ts";
 import type { InterfaceListener } from "./listen.ts";
+import { NdiReader, NdiUnavailable } from "./ndi/receiver.ts";
 import { APP_ROOT, VERSION } from "./paths.ts";
 import type { StateStore } from "./state.ts";
 
@@ -20,6 +21,8 @@ interface Deps {
   guide: GracenoteGuide;
   /** Controls which network cards the server answers on (absent in tests). */
   network?: () => InterfaceListener | undefined;
+  /** Reads NDI streams off the network for the small live pictures (tests pass their own). */
+  ndi?: NdiReader;
 }
 
 /** A stand-in picture for simulation mode: a moving bar, so the panel visibly refreshes. */
@@ -31,8 +34,9 @@ function simulatedPreview(name: string, stream: string) {
 
 export const WEB_DIST = join(APP_ROOT, "web", "dist");
 
-export async function buildServer({ cfg, state, engine, guide, network }: Deps) {
+export async function buildServer({ cfg, state, engine, guide, network, ndi = new NdiReader() }: Deps) {
   const app = Fastify({ logger: { level: "warn" } });
+  app.addHook("onClose", async () => ndi.stop());
   await app.register(fastifyWebsocket);
 
   if (existsSync(WEB_DIST)) {
@@ -109,30 +113,50 @@ export async function buildServer({ cfg, state, engine, guide, network }: Deps) 
   app.get("/api/v2/devices", async () => state.state.devices);
 
   /**
-   * A small live picture of a device: the NDI stream linked to it, fetched from
-   * the mosaic engine that can see it. 202 while the first frame is on its way.
+   * A small live picture of a device: the NDI stream linked to it, read
+   * straight off the network by this server. 202 while the first frame is on
+   * its way.
    */
   app.get("/api/v2/devices/:id/preview.jpg", async (req, reply) => {
     const { id } = Id.parse(req.params);
     const site = engine.site();
     const device = site.devices.find((d) => d.id === id);
     if (!device?.preview) return reply.status(404).send({ error: "No preview stream is linked to this device" });
-    return streamPicture(reply, device.preview.device, device.preview.stream, device.name);
+    return streamPicture(reply, device.preview.stream, device.name, device.preview.device);
   });
 
   /**
-   * The same picture for any NDI stream by name, so the admin can see which
-   * stream is which before linking one to a device. `engine` is the mosaic
-   * engine device whose media server pulls the stream off the network.
+   * The same picture for any NDI stream by name: the pieces of a video wall on
+   * the touch panel, and the admin checking which stream is which. `engine`
+   * (optional) is a mosaic engine device to ask instead, only when this
+   * machine can't read NDI itself.
    */
   app.get("/api/v2/streams/preview.jpg", async (req, reply) => {
-    const { engine: via, name } = z.object({ engine: z.string().min(1), name: z.string().min(1) }).parse(req.query);
-    return streamPicture(reply, via, name, name);
+    const { engine: via, name } = z.object({ engine: z.string().optional(), name: z.string().min(1) }).parse(req.query);
+    return streamPicture(reply, name, name, via);
   });
 
-  async function streamPicture(reply: FastifyReply, mosaicId: string, stream: string, label: string) {
+  /** The NDI streams this server sees on the network itself. */
+  app.get("/api/v2/streams", async (_req, reply) => {
+    if (cfg.simulate) return { streams: [] };
+    try {
+      return { streams: await ndi.sources() };
+    } catch (err) {
+      return reply.status(502).send({ error: (err as Error).message });
+    }
+  });
+
+  async function streamPicture(reply: FastifyReply, stream: string, label: string, mosaicId?: string) {
     reply.header("cache-control", "no-store");
     if (cfg.simulate) return reply.header("x-signal", "ok").type("image/svg+xml").send(simulatedPreview(label, stream));
+    try {
+      const picture = await ndi.picture(stream);
+      if ("waiting" in picture) return reply.status(202).send();
+      return reply.header("x-signal", picture.signal).type("image/jpeg").send(picture.jpeg);
+    } catch (err) {
+      // This machine can't read NDI at all: ask the mosaic engine, if there is one. Anything else is about this stream.
+      if (!(err instanceof NdiUnavailable) || !mosaicId) return reply.status(502).send({ error: (err as Error).message });
+    }
     const mosaic = engine.site().devices.find((d) => d.id === mosaicId);
     const host = String(mosaic?.settings.host ?? "");
     if (!host) return reply.status(404).send({ error: "The mosaic engine for this preview isn't set up" });

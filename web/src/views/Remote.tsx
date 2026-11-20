@@ -63,8 +63,11 @@ export function Remote() {
   );
 }
 
-/** Asks for a new picture a few times a second (or every `everyMs`) while the tab is in front. */
-export function Preview({ url, everyMs = 250 }: { url: string; everyMs?: number }) {
+/**
+ * Asks for a new picture a few times a second (or every `everyMs`) while the
+ * tab is in front. `quiet` shows the picture or nothing: no notes over it.
+ */
+export function Preview({ url, everyMs = 250, quiet = false }: { url: string; everyMs?: number; quiet?: boolean }) {
   const [src, setSrc] = useState<string>();
   const [note, setNote] = useState("Waiting for the picture…");
   const last = useRef<string>();
@@ -109,7 +112,7 @@ export function Preview({ url, everyMs = 250 }: { url: string; everyMs?: number 
   return (
     <div className="preview">
       {src && <img src={src} alt="What this device is showing" />}
-      {note && <span className="preview-note">{note}</span>}
+      {note && !quiet && <span className="preview-note">{note}</span>}
     </div>
   );
 }

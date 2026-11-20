@@ -29,6 +29,8 @@ const PYTHON_SHA256 = "91d828c2da3a029b41699e918674a0cb379c02cf20dab9c501306885f
 // srptools 2 changed a call pyatv 0.18 makes, which breaks pairing; keep it on 1.x until pyatv follows.
 const PYATV = "pyatv==0.18.0";
 const PYATV_PINS = ["srptools==1.0.1"];
+// Reading NDI streams off the network for the live pictures (cyndilib carries the NDI library).
+const NDI_PACKAGES = ["cyndilib==0.1.3", "Pillow==13.0.0"];
 
 async function main() {
   rmSync(STAGE, { recursive: true, force: true });
@@ -73,6 +75,8 @@ async function main() {
   await addPython(join(STAGE, "runtime/python"));
   mkdirSync(join(STAGE, "app/appletv"), { recursive: true });
   cpSync(join(ROOT, "agent/src/transports/appletv/bluevue_atv.py"), join(STAGE, "app/appletv/bluevue_atv.py"));
+  mkdirSync(join(STAGE, "app/ndi"), { recursive: true });
+  cpSync(join(ROOT, "src/ndi/bluevue_ndi.py"), join(STAGE, "app/ndi/bluevue_ndi.py"));
 
   const zip = join(OUT, `${NAME}-${pkg.version}-win-x64.zip`);
   rmSync(zip, { force: true });
@@ -130,15 +134,16 @@ async function addPython(dir: string) {
   mkdirSync(dir, { recursive: true });
   execFileSync("unzip", ["-qo", zipPath, "-d", dir]);
 
-  const wheels = join(CACHE, `wheels-${[PYATV, ...PYATV_PINS].join("-")}-py${PYTHON_VERSION}`);
+  const packages = [PYATV, ...PYATV_PINS, ...NDI_PACKAGES];
+  const wheels = join(CACHE, `wheels-${packages.join("-")}-py${PYTHON_VERSION}`);
   if (!existsSync(wheels)) {
-    console.log(`Downloading ${PYATV} for Windows…`);
+    console.log(`Downloading ${packages.join(", ")} for Windows…`);
     const [major, minor] = PYTHON_VERSION.split(".");
     try {
-      execFileSync(process.env.PYTHON ?? "python3", ["-m", "pip", "download", "--quiet", "--disable-pip-version-check", PYATV, ...PYATV_PINS, "--platform", "win_amd64", "--python-version", `${major}.${minor}`, "--implementation", "cp", "--only-binary=:all:", "-d", wheels], { stdio: "inherit" });
+      execFileSync(process.env.PYTHON ?? "python3", ["-m", "pip", "download", "--quiet", "--disable-pip-version-check", ...packages, "--platform", "win_amd64", "--python-version", `${major}.${minor}`, "--implementation", "cp", "--only-binary=:all:", "-d", wheels], { stdio: "inherit" });
     } catch (err) {
       rmSync(wheels, { recursive: true, force: true });
-      throw new Error(`Couldn't download pyatv. The build needs python3 with pip (set PYTHON to choose one). ${(err as Error).message}`);
+      throw new Error(`Couldn't download the Python packages. The build needs python3 with pip (set PYTHON to choose one). ${(err as Error).message}`);
     }
   }
   const site = join(dir, "Lib/site-packages");
@@ -147,7 +152,7 @@ async function addPython(dir: string) {
   // The embeddable Python only looks where this file says.
   const [major, minor] = PYTHON_VERSION.split(".");
   writeFileSync(join(dir, `python${major}${minor}._pth`), `python${major}${minor}.zip\r\n.\r\nLib\\site-packages\r\n`);
-  writeFileSync(join(dir, "VERSION.txt"), `Python ${PYTHON_VERSION} (embeddable, win-amd64) from python.org, with ${[PYATV, ...PYATV_PINS].join(", ")} from PyPI\n`);
+  writeFileSync(join(dir, "VERSION.txt"), `Python ${PYTHON_VERSION} (embeddable, win-amd64) from python.org, with ${packages.join(", ")} from PyPI\n`);
 }
 
 await main();

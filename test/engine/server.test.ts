@@ -8,6 +8,7 @@ import { ConfigSchema } from "../../src/config.ts";
 import { EXAMPLE_SITE, ensureSite } from "../../src/engine/bootstrap.ts";
 import { startEngine } from "../../src/engine/index.ts";
 import { GracenoteGuide } from "../../src/guide/gracenote.ts";
+import { NdiReader } from "../../src/ndi/receiver.ts";
 import { buildServer } from "../../src/server.ts";
 import { StateStore } from "../../src/state.ts";
 
@@ -58,7 +59,49 @@ test("first run creates the site from the example; the API serves the panel and 
   }
 });
 
-test("a device's preview picture comes from the mosaic engine that sees its NDI stream", async () => {
+test("pictures of NDI streams are read off the network by the server itself", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "bv-ndi-"));
+  const configFile = join(dir, "system.json");
+  writeFileSync(configFile, JSON.stringify({ guide: { enabled: false } }));
+  const cfg = { ...ConfigSchema.parse({ dataDir: join(dir, "data"), guide: { enabled: false } }), file: configFile };
+  mkdirSync(cfg.dataDir, { recursive: true });
+  // The mosaic engine here answers nothing: the picture must not come from it.
+  writeFileSync(join(cfg.dataDir, "site.json"), JSON.stringify({
+    devices: [
+      { id: "mosaic", name: "Mosaic", profile: "mosaic-engine", settings: { host: "127.0.0.1", port: 1 } },
+      { id: "bar-box", name: "Bar box", profile: "pjlink-projector", settings: { host: "127.0.0.1", port: 1 }, preview: { device: "mosaic", stream: "ZOWIEBOX (Bar & grill)" } },
+    ],
+  }));
+  const state = new StateStore();
+  const engine = startEngine(cfg.dataDir, state, false);
+  const guide = new GracenoteGuide(cfg, state, () => engine.site().channels);
+  const ndi = new NdiReader(() => [process.execPath, join(import.meta.dirname, "../fixtures/fake-ndi-helper.mjs")]);
+  const app = await buildServer({ cfg, state, engine, guide, ndi });
+  const get = (url: string) => app.inject({ method: "GET", url });
+  try {
+    // Still connecting to the stream: the panel is told to ask again.
+    assert.equal((await get("/api/v2/devices/bar-box/preview.jpg")).statusCode, 202);
+    const ok = await get("/api/v2/devices/bar-box/preview.jpg");
+    assert.equal(ok.statusCode, 200);
+    assert.equal(ok.headers["content-type"], "image/jpeg");
+    assert.equal(ok.headers["x-signal"], "ok");
+    assert.deepEqual([...ok.rawPayload.subarray(0, 2)], [0xff, 0xd8]);
+
+    // A wall piece asks by stream name alone; no mosaic engine is involved.
+    assert.equal((await get(`/api/v2/streams/preview.jpg?name=${encodeURIComponent("ZOWIEBOX (Bar & grill)")}`)).statusCode, 200);
+    const missing = await get("/api/v2/streams/preview.jpg?engine=mosaic&name=GONE");
+    assert.equal(missing.statusCode, 502);
+    assert.match(missing.json().error, /isn't on the network/);
+
+    assert.deepEqual((await get("/api/v2/streams")).json(), { streams: ["ZOWIEBOX (Bar & grill)"] });
+  } finally {
+    await app.close();
+    engine.stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a machine that can't read NDI asks the mosaic engine for the picture instead", async () => {
   // A stand-in mosaic engine: only the stream preview request matters here.
   const asked: string[] = [];
   let mode: "wait" | "ok" | "lost" | "old" = "wait";
@@ -88,7 +131,8 @@ test("a device's preview picture comes from the mosaic engine that sees its NDI 
   const state = new StateStore();
   const engine = startEngine(cfg.dataDir, state, false);
   const guide = new GracenoteGuide(cfg, state, () => engine.site().channels);
-  const app = await buildServer({ cfg, state, engine, guide });
+  const ndi = new NdiReader(() => [process.execPath, "-e", "process.exit(3)"]); // no NDI on this machine
+  const app = await buildServer({ cfg, state, engine, guide, ndi });
   const get = (id: string) => app.inject({ method: "GET", url: `/api/v2/devices/${id}/preview.jpg` });
 
   try {

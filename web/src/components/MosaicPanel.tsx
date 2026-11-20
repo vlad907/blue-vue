@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, type UiDevice, type UiProfile } from "../api.ts";
 import { useApp } from "../context.tsx";
 import { isOn } from "../template.ts";
+import { Preview } from "../views/Remote.tsx";
 
 // Mosaic walls the way staff think of them: a picture of each wall, cut into
 // the pieces it's split into. Tap a piece (or the background), then tap what
@@ -29,6 +30,11 @@ function playing(c: { ndiName?: string; playlist?: string; video?: string }) {
   if (c.playlist) return { text: c.playlist, kind: "Playlist" };
   if (c.video) return { text: c.video, kind: "Video" };
   return undefined;
+}
+
+/** A live picture of an NDI stream, read off the network by the control server. */
+function streamUrl(device: UiDevice, ndiName: string) {
+  return `/api/v2/streams/preview.jpg?engine=${encodeURIComponent(device.id)}&name=${encodeURIComponent(ndiName)}`;
 }
 
 /** Where each piece of a split sits, in percent of the wall: [left, top, width, height]. */
@@ -111,11 +117,12 @@ export function MosaicPanel({ device, profile, groups, background }: { device: U
                   return (
                     <button
                       key={s.slot}
-                      className={`piece${selected ? " selected" : ""}${now ? "" : " empty"}${s.signal === "lost" ? " lost" : ""}`}
+                      className={`piece${selected ? " selected" : ""}${now ? "" : " empty"}${s.signal === "lost" ? " lost" : ""}${s.ndiName && on ? " live" : ""}`}
                       style={{ left: `${l}%`, top: `${t}%`, width: `${w}%`, height: `${h}%` }}
                       aria-pressed={selected}
                       onClick={() => setPicked({ kind: "slot", group: g.id, slot: s.slot })}
                     >
+                      {s.ndiName && on && <Preview key={s.ndiName} url={streamUrl(device, s.ndiName)} everyMs={500} quiet />}
                       <small>{s.name}</small>
                       <b>{now?.text ?? "Empty"}</b>
                       {s.signal === "lost" && <em>No signal</em>}
@@ -139,6 +146,7 @@ export function MosaicPanel({ device, profile, groups, background }: { device: U
         })}
         {hasBackground && (
           <button className={`backdrop${target?.kind === "background" ? " selected" : ""}`} aria-pressed={target?.kind === "background"} onClick={() => setPicked({ kind: "background" })}>
+            {bg.ndiName && bg.on && <Preview key={bg.ndiName} url={streamUrl(device, bg.ndiName)} everyMs={1000} quiet />}
             <small>Background (under every wall)</small>
             <b>{playing(bg)?.text ?? "Nothing chosen"}</b>
             <span className={`pill ${bg.on ? "ok" : ""}`}>{bg.on ? "on" : "off"}</span>
