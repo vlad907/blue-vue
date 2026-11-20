@@ -195,6 +195,9 @@ export class AdbClient extends EventEmitter {
     return new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.streams.delete(local);
+        // A TV that fell asleep leaves the connection looking open but dead. Drop it, so the
+        // next command connects afresh instead of also going into the dead one.
+        this.socket?.destroy();
         reject(new Error(`"${command}" didn't finish in ${timeoutMs / 1000}s`));
       }, timeoutMs);
       const done = <T>(f: (v: T) => void) => (v: T) => {

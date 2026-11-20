@@ -287,6 +287,36 @@ test("turning a wall on wakes a TV that keeps dropping its connection, then sele
   }
 });
 
+test("a TV that isn't answering is still tried in the background and turned on when it does; off cancels that", async () => {
+  identityStore.dir = mkdtempSync(join(tmpdir(), "bv-adb-"));
+  resetAdbKey();
+  const tv = await new FakeFireTv().start();
+  const { manager, state, cleanup } = setup([], false, { powerOnTries: 2, powerOnRetryMs: 50, powerOnKeepMs: 60_000, powerOnKeepEveryMs: 100, inputAfterOnMs: 20, inputAgainMs: 20 });
+  try {
+    manager.apply(site({ devices: [{ id: "tv", name: "TV", profile: "fire-tv", settings: { host: "127.0.0.1", port: tv.port, powerOnInput: "hdmi1" } }] }));
+    await until(() => state.state.devices.tv.state.model === "AFTKRT", 5000);
+
+    // Off the network for the first five tries: a plain "power_on" command (as a scene sends it) says so, and keeps going.
+    tv.dropNext = 5;
+    await assert.rejects(manager.execute("tv", "power_on"), /keeps trying/);
+    assert.equal(tv.awake, false);
+    await until(() => tv.awake, 5000);
+    await until(() => tv.commands.some((c) => c.includes("HDMI_1")), 5000); // and its input follows
+
+    // Turned off while still being tried: it must not come on later by itself.
+    await manager.capability("tv", "power", "off");
+    tv.dropNext = 1000;
+    await assert.rejects(manager.capability("tv", "power", "on"), /keeps trying/);
+    await manager.capability("tv", "power", "off").catch(() => {}); // the TV hangs up on this too
+    tv.dropNext = 0;
+    await new Promise((r) => setTimeout(r, 500));
+    assert.equal(tv.awake, false);
+  } finally {
+    cleanup();
+    tv.stop();
+  }
+});
+
 test("a TV comes back on the input it was left on, also after the server restarts", async () => {
   const dir = mkdtempSync(join(tmpdir(), "bv-inputs-"));
   const inputsFile = join(dir, "data", "last-inputs.json");

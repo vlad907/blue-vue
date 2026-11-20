@@ -23,6 +23,9 @@ export interface PowerOnTiming {
   powerOnRetryMs: number;
   inputAfterOnMs: number;
   inputAgainMs: number;
+  /** After those tries: how long a TV that isn't answering is still tried in the background, and how often. */
+  powerOnKeepMs: number;
+  powerOnKeepEveryMs: number;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -39,6 +42,8 @@ export class DeviceManager {
   private timing: PowerOnTiming;
   /** The input each TV was last switched to through Blue Vue, kept across restarts. */
   private lastInputs: Record<string, { input: string; at: string }> = {};
+  /** TVs that didn't answer "on" and are still being tried in the background. */
+  private waking = new Map<string, NodeJS.Timeout>();
 
   constructor(
     private profiles: ProfileLibrary,
@@ -52,7 +57,7 @@ export class DeviceManager {
     }
     this.factory = opts.factory ?? defaultFactory(opts.simulate);
     // Simulated TVs wake at once, so the panel stays snappy in simulation.
-    this.timing = { powerOnTries: 8, powerOnRetryMs: 2500, inputAfterOnMs: opts.simulate ? 200 : 4000, inputAgainMs: opts.simulate ? 200 : 6000, ...opts.timing };
+    this.timing = { powerOnTries: 8, powerOnRetryMs: 2500, powerOnKeepMs: 60 * 60_000, powerOnKeepEveryMs: 10_000, inputAfterOnMs: opts.simulate ? 200 : 4000, inputAgainMs: opts.simulate ? 200 : 6000, ...opts.timing };
   }
 
   apply(site: Site) {
@@ -118,6 +123,7 @@ export class DeviceManager {
   }
 
   private remove(id: string) {
+    this.stopWaking(id);
     this.runtimes.get(id)?.stop();
     this.runtimes.delete(id);
     this.fingerprints.delete(id);
@@ -137,6 +143,10 @@ export class DeviceManager {
 
   async execute(deviceId: string, command: string, params: Record<string, unknown> = {}) {
     const rt = this.runtime(deviceId);
+    // "On" is the same patient job wherever it comes from: a wall card, a room card, a remote or a scene.
+    const power = rt.profile.capabilities.power as { on?: string; off?: string } | undefined;
+    if (power?.on === command) return this.powerOn(deviceId, command, params);
+    if (power?.off === command) this.stopWaking(deviceId);
     await rt.execute(command, params);
     // Selecting an input, from anywhere (a wall card, a room card, a scene), is what gets remembered.
     const src = rt.profile.capabilities.source as { select?: string; param?: string } | undefined;
@@ -180,21 +190,63 @@ export class DeviceManager {
     const def = rt.profile.capabilities[cap] as Record<string, string> | undefined;
     if (!def?.[action]) throw new CommandError(`${rt.device.name} doesn't support ${cap}.${action}`);
     const params = def.param !== undefined && value !== undefined ? { [def.param]: value } : {};
-    if (cap !== "power" || action !== "on") return void (await this.execute(deviceId, def[action], params));
+    await this.execute(deviceId, def[action], params);
+  }
 
-    // A TV in standby often drops its connection for a few seconds at a time
-    // (Fire TVs do), so "on" keeps trying for a while instead of failing on the first miss.
+  /**
+   * Turns a TV on, patiently. A TV in standby often drops its connection for a
+   * few seconds at a time, so "on" is tried several times. Some (Fire TVs) leave
+   * the network for most of each hour while off: one that still isn't answering
+   * is tried in the background until it does, and turned on then.
+   */
+  private async powerOn(deviceId: string, command: string, params: Record<string, unknown>) {
+    const rt = this.runtime(deviceId);
+    this.stopWaking(deviceId);
     const t = this.timing;
     for (let attempt = 1; ; attempt++) {
       try {
-        await rt.execute(def[action], params);
+        await rt.execute(command, params);
         break;
       } catch (err) {
-        if (err instanceof CommandError || attempt >= t.powerOnTries) throw err;
-        await sleep(t.powerOnRetryMs);
+        if (err instanceof CommandError) throw err;
+        if (attempt < t.powerOnTries) {
+          await sleep(t.powerOnRetryMs);
+          continue;
+        }
+        if (t.powerOnKeepMs <= 0) throw err;
+        this.keepWaking(deviceId, command, params);
+        const minutes = Math.round(t.powerOnKeepMs / 60_000);
+        throw new Error(`${rt.device.name} isn't answering (a TV that's off can leave the network for a while). Blue Vue keeps trying for ${minutes >= 1 ? `${minutes} minutes` : "a while"} and turns it on when it answers. ${err instanceof Error ? err.message : err}`);
       }
     }
     await this.selectPowerOnInput(deviceId);
+  }
+
+  private keepWaking(deviceId: string, command: string, params: Record<string, unknown>) {
+    const until = Date.now() + this.timing.powerOnKeepMs;
+    const tick = async () => {
+      const rt = this.runtimes.get(deviceId);
+      if (!rt || Date.now() > until) return void this.waking.delete(deviceId);
+      try {
+        await rt.execute(command, params);
+      } catch (err) {
+        // Turned off, removed or restarted meanwhile: the timer on record is no longer this one.
+        if (err instanceof CommandError || this.waking.get(deviceId) !== timer) return;
+        timer = setTimeout(tick, this.timing.powerOnKeepEveryMs);
+        this.waking.set(deviceId, timer);
+        return;
+      }
+      if (this.waking.get(deviceId) !== timer) return;
+      this.waking.delete(deviceId);
+      await this.selectPowerOnInput(deviceId).catch(() => {});
+    };
+    let timer = setTimeout(tick, this.timing.powerOnKeepEveryMs);
+    this.waking.set(deviceId, timer);
+  }
+
+  private stopWaking(deviceId: string) {
+    clearTimeout(this.waking.get(deviceId));
+    this.waking.delete(deviceId);
   }
 
   /**
