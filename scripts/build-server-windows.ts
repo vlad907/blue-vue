@@ -61,6 +61,9 @@ async function main() {
   cpSync(join(ROOT, "config/example-site.json"), join(STAGE, "config/example-site.json"));
   cpSync(join(ROOT, "config/system.json"), join(STAGE, "config/system.json")); // for Start-BlueVue.cmd
   writeFileSync(join(STAGE, "package.json"), JSON.stringify({ name: "blue-vue-server", version: pkg.version, private: true }, null, 2));
+  // When this package was built: the admin's Update button compares it with latest.json on GitHub.
+  const built = new Date().toISOString();
+  writeFileSync(join(STAGE, "build.json"), JSON.stringify({ built }, null, 2) + "\n");
   for (const f of ["Install Blue Vue.cmd", "Uninstall Blue Vue.cmd", "install-server.ps1", "uninstall-server.ps1", "Start-BlueVue.cmd", "README.txt"]) {
     // Windows line endings: cmd.exe misreads labels in LF-only batch files.
     const text = readFileSync(join(ROOT, "packaging/windows", f), "utf8").replace(/\r?\n/g, "\r\n");
@@ -81,6 +84,13 @@ async function main() {
   const zip = join(OUT, `${NAME}-${pkg.version}-win-x64.zip`);
   rmSync(zip, { force: true });
   execFileSync("zip", ["-qr", zip, NAME], { cwd: OUT });
+  // Describes the newest package for servers checking for an update. Committed with the zip.
+  const data = readFileSync(zip);
+  const file = `${NAME}-${pkg.version}-win-x64.zip`;
+  writeFileSync(
+    join(ROOT, "packaging/windows/latest.json"),
+    JSON.stringify({ built, package: file, url: `https://github.com/vlad907/blue-vue/raw/main/release/${file}`, sha256: createHash("sha256").update(data).digest("hex"), size: data.length }, null, 2) + "\n",
+  );
   console.log(`\nDone: ${zip}`);
 }
 

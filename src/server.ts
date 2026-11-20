@@ -5,6 +5,7 @@ import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import { z } from "zod";
 import { registerAdminRoutes } from "./admin/routes.ts";
+import type { Updater } from "./admin/update.ts";
 import type { Config } from "./config.ts";
 import type { Engine } from "./engine/index.ts";
 import type { Capabilities } from "./engine/profile-schema.ts";
@@ -23,6 +24,8 @@ interface Deps {
   network?: () => InterfaceListener | undefined;
   /** Reads NDI streams off the network for the small live pictures (tests pass their own). */
   ndi?: NdiReader;
+  /** The admin's Update button (tests pass their own). */
+  updater?: Updater;
 }
 
 /** A stand-in picture for simulation mode: a moving bar, so the panel visibly refreshes. */
@@ -34,7 +37,7 @@ function simulatedPreview(name: string, stream: string) {
 
 export const WEB_DIST = join(APP_ROOT, "web", "dist");
 
-export async function buildServer({ cfg, state, engine, guide, network, ndi = new NdiReader() }: Deps) {
+export async function buildServer({ cfg, state, engine, guide, network, ndi = new NdiReader(), updater }: Deps) {
   const app = Fastify({ logger: { level: "warn" } });
   app.addHook("onClose", async () => ndi.stop());
   await app.register(fastifyWebsocket);
@@ -50,7 +53,7 @@ export async function buildServer({ cfg, state, engine, guide, network, ndi = ne
     );
   }
 
-  registerAdminRoutes(app, cfg, engine, network);
+  registerAdminRoutes(app, cfg, engine, network, updater);
 
   app.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
     const status = err instanceof z.ZodError ? 400 : (err.statusCode ?? 500);

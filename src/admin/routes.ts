@@ -8,6 +8,7 @@ import { type Site, SiteSchema } from "../engine/site.ts";
 import { lintScenes } from "../engine/site-lint.ts";
 import { AdminAuth, COOKIE, readCookie, sessionCookie } from "./auth.ts";
 import { registerProfileRoutes } from "./profile-routes.ts";
+import { Updater, updateDataDir } from "./update.ts";
 import { type InterfaceListener, listNics, resolveInterfaces } from "../listen.ts";
 
 const hashOf = (site: Site) => createHash("sha256").update(JSON.stringify(site)).digest("hex").slice(0, 16);
@@ -15,7 +16,7 @@ const hashOf = (site: Site) => createHash("sha256").update(JSON.stringify(site))
 const BACKUP_FORMAT = "blue-vue-backup";
 
 /** Admin API: everything that changes the site. Every route except login/setup needs a session. */
-export function registerAdminRoutes(app: FastifyInstance, cfg: Config, engine: Engine, network?: () => InterfaceListener | undefined) {
+export function registerAdminRoutes(app: FastifyInstance, cfg: Config, engine: Engine, network?: () => InterfaceListener | undefined, updater = new Updater({ dataDir: updateDataDir(cfg.file) })) {
   const auth = new AdminAuth(cfg.dataDir);
   const sessionOf = (req: FastifyRequest) => readCookie(req.headers.cookie, COOKIE);
   const fail = (status: number, message: string) => Object.assign(new Error(message), { statusCode: status });
@@ -66,6 +67,17 @@ export function registerAdminRoutes(app: FastifyInstance, cfg: Config, engine: E
     });
 
     registerProfileRoutes(admin, engine);
+
+    // --- The Update button: this server's build, the newest one, and installing it ---
+    admin.get("/api/admin/update", async (req) => updater.status((req.query as { fresh?: string }).fresh === "1"));
+    admin.post("/api/admin/update", async () => {
+      try {
+        await updater.start();
+      } catch (err) {
+        throw fail(409, (err as Error).message);
+      }
+      return updater.status();
+    });
 
     // --- Which network cards Blue Vue answers on ---------------------------------
     const localAddressOf = (req: FastifyRequest) => (req.socket.localAddress ?? "").replace(/^::ffff:/, "");

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ApiError, adminApi, type NetworkInfo } from "./adminApi.ts";
+import { ApiError, adminApi, type NetworkInfo, type UpdateStatus } from "./adminApi.ts";
 import { useDraft } from "./draft.tsx";
 import { Field, Text } from "./forms.tsx";
 
@@ -103,6 +103,7 @@ export function Settings({ onSignOut }: { onSignOut: () => void }) {
         </div>
       </section>
       <NetworkCards />
+      <SoftwareUpdate />
       <section className="card">
         <h3>Admin password</h3>
         <div className="aform two">
@@ -124,6 +125,93 @@ export function Settings({ onSignOut }: { onSignOut: () => void }) {
       </section>
       <button className="btn" onClick={() => adminApi.logout().then(onSignOut)}>Sign out</button>
     </div>
+  );
+}
+
+const when = (iso?: string) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "unknown");
+
+/**
+ * Updates the server from the admin: shows this server's version and the newest
+ * one on GitHub, and installs it. The server restarts at the end, so the page
+ * keeps asking until it answers again with the new version.
+ */
+function SoftwareUpdate() {
+  const [info, setInfo] = useState<UpdateStatus>();
+  const [busy, setBusy] = useState(false);
+  const [updating, setUpdating] = useState<{ from: string; since: number }>();
+  const [message, setMessage] = useState<{ text: string; bad?: boolean }>();
+  const check = (fresh: boolean) => {
+    setBusy(true);
+    return adminApi.update(fresh).then(setInfo, (err) => setMessage({ text: err.message, bad: true })).finally(() => setBusy(false));
+  };
+  useEffect(() => {
+    void check(false);
+  }, []);
+
+  // While updating: follow the download, then wait for the restarted server.
+  useEffect(() => {
+    if (!updating) return;
+    const timer = window.setInterval(async () => {
+      try {
+        const now = await adminApi.update();
+        setInfo(now);
+        if (now.phase === "failed") {
+          setUpdating(undefined);
+          setMessage({ text: now.error ?? "The update failed", bad: true });
+        } else if (now.current && now.current.built !== updating.from) {
+          setUpdating(undefined);
+          setMessage({ text: "Updated. Reloading this page…" });
+          window.setTimeout(() => location.reload(), 1500);
+        } else if (Date.now() - updating.since > 6 * 60_000) {
+          setUpdating(undefined);
+          setMessage({ text: "The server is still on the old version after six minutes. On the server, look at logs\\update.log in Blue Vue's data folder.", bad: true });
+        }
+      } catch (err) {
+        // 401 after the restart means the new server is up and wants a fresh sign-in.
+        if (/sign in/i.test((err as Error).message)) location.reload();
+      }
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [updating]);
+
+  if (!info) return null;
+  const start = () => {
+    if (!confirm("Update Blue Vue now? The server restarts, so the touch panels stop answering for about a minute.")) return;
+    setMessage(undefined);
+    adminApi.startUpdate().then(
+      (now) => {
+        setInfo(now);
+        setUpdating({ from: info.current?.built ?? "", since: Date.now() });
+      },
+      (err) => setMessage({ text: err.message, bad: true }),
+    );
+  };
+  const doing =
+    !updating ? ""
+    : info.phase === "downloading" ? `Downloading${info.progress !== undefined ? ` ${Math.round(info.progress * 100)}%` : ""}…`
+    : info.phase === "unpacking" ? "Unpacking…"
+    : "Installing and restarting the server…";
+
+  return (
+    <section className="card">
+      <h3>Software update</h3>
+      <p>
+        This server: <b>{info.current ? `built ${when(info.current.built)}` : "running from source"}</b>
+        {info.latest && <> · Newest: <b>built {when(info.latest.built)}</b></>}
+      </p>
+      {info.checkError && info.current && <p className="err">Couldn't check for updates: {info.checkError}</p>}
+      {info.cannot && <p className="help">{info.cannot}</p>}
+      {!info.cannot && !info.checkError && !info.available && !updating && <p className="help">Blue Vue is up to date.</p>}
+      {!info.cannot && info.available && !updating && (
+        <p className="help">A newer version is ready ({Math.round((info.latest?.size ?? 0) / 1e6)} MB). Devices, scenes and the admin password are kept.</p>
+      )}
+      {updating && <p><b>{doing}</b> Keep this page open.</p>}
+      {message && <p className={message.bad ? "err" : "help"}>{message.text}</p>}
+      <div className="row-tight">
+        <button className="btn primary" disabled={!!info.cannot || !info.available || !!updating} onClick={start}>Update now</button>
+        <button className="btn" disabled={busy || !!updating} onClick={() => { setMessage(undefined); void check(true); }}>Check for updates</button>
+      </div>
+    </section>
   );
 }
 

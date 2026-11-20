@@ -122,6 +122,17 @@ export class ApiError extends Error {
   }
 }
 
+export interface UpdateStatus {
+  current: { built: string } | null;
+  cannot?: string;
+  latest?: { built: string; size: number };
+  available: boolean;
+  checkError?: string;
+  phase: "idle" | "downloading" | "unpacking" | "installing" | "failed";
+  progress?: number;
+  error?: string;
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
@@ -167,6 +178,8 @@ export const adminApi = {
     call<{ found: FoundTv[]; subnets: string[]; simulated: boolean }>("POST", "/api/admin/discover/tvs", { location, kind, subnet }),
   mosaicCanvases: (host: string, port: number) => call<{ canvases: MosaicCanvas[]; simulated: boolean }>("POST", "/api/admin/mosaic/canvases", { host, port }),
   network: () => call<NetworkInfo>("GET", "/api/admin/network"),
+  update: (fresh = false) => call<UpdateStatus>("GET", `/api/admin/update${fresh ? "?fresh=1" : ""}`),
+  startUpdate: () => call<UpdateStatus>("POST", "/api/admin/update"),
   setNetwork: (interfaces: string[], force = false) => call<{ status: ListenStatus }>("PUT", "/api/admin/network", { interfaces, force }),
   learnIr: (location: string, irHost: string) => call<{ pronto: string }>("POST", "/api/admin/ir/learn", { location, irHost }),
   profiles: () => call<ProfileEntry[]>("GET", "/api/v2/profiles"),
