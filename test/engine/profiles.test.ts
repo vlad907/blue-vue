@@ -10,7 +10,7 @@ import { finishPairing, startPairing } from "../../agent/src/transports/androidt
 import { appleTvStore, helper as appleTvHelper, pairAppleTv, scanAppleTvs } from "../../agent/src/transports/appletv/helper.ts";
 import { FakeTv } from "../../agent/test/fake-android-tv.ts";
 import { FakeFireTv } from "../../agent/test/fake-adb-device.ts";
-import { resetAdbKey } from "../../agent/src/transports/adb/client.ts";
+import { AdbClient, adbTiming, resetAdbKey } from "../../agent/src/transports/adb/client.ts";
 import { DeviceManager, type PowerOnTiming } from "../../src/engine/device-manager.ts";
 import { ProfileLibrary } from "../../src/engine/profiles.ts";
 import { EngineSceneRunner } from "../../src/engine/scenes.ts";
@@ -250,6 +250,29 @@ test("Fire TV profile over built-in ADB: asks to be allowed once, discrete power
     assert.equal(state.state.devices.tv.state.power, "off");
   } finally {
     cleanup();
+    tv.stop();
+  }
+});
+
+test("a Fire TV whose Allow debugging prompt was missed is asked again", async () => {
+  identityStore.dir = mkdtempSync(join(tmpdir(), "bv-adb-"));
+  resetAdbKey();
+  const tv = await new FakeFireTv().start();
+  tv.allow = "wait"; // nobody is at the TV: the prompt goes unanswered
+  const before = adbTiming.askAgainMs;
+  adbTiming.askAgainMs = 1500;
+  const client = new AdbClient("127.0.0.1", tv.port);
+  try {
+    await assert.rejects(client.connect(1000), /Allow debugging/);
+    assert.equal(tv.prompts, 1);
+    await until(() => client.state === "disconnected", 4000); // it hangs up instead of waiting for ever
+    tv.allow = "yes"; // now someone is there
+    await client.connect(2000);
+    assert.equal(tv.prompts, 2);
+    assert.match(await client.shell("echo model=$(getprop ro.product.model)"), /AFTKRT/);
+  } finally {
+    adbTiming.askAgainMs = before;
+    client.close();
     tv.stop();
   }
 });

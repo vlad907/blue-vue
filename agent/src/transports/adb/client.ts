@@ -136,6 +136,9 @@ function modInverse(a: bigint, m: bigint) {
 
 // --- The connection ---------------------------------------------------------------
 
+/** How long an unanswered "Allow debugging?" is left before the TV is asked again (tests shorten it). */
+export const adbTiming = { askAgainMs: 120_000 };
+
 export type AdbState = "disconnected" | "connecting" | "awaiting-approval" | "connected";
 
 interface Stream {
@@ -160,6 +163,7 @@ export class AdbClient extends EventEmitter {
   private nextId = 1;
   private authTries = 0;
   private ready?: Promise<void>;
+  private askAgain?: NodeJS.Timeout;
 
   host: string;
   port: number;
@@ -260,7 +264,8 @@ export class AdbClient extends EventEmitter {
       });
       sock.on("error", (err) => fail(friendly(err, this.host, this.port)));
       sock.on("close", () => {
-        fail(new Error(this.state === "awaiting-approval" ? "The TV turned down the debugging request" : `Connection to ${this.host}:${this.port} closed`));
+        clearTimeout(this.askAgain);
+        fail(new Error(this.state === "awaiting-approval" ? `"Allow debugging?" wasn't accepted on the TV; asking it again` : `Connection to ${this.host}:${this.port} closed`));
         for (const s of this.streams.values()) s.reject(new Error("Connection to the TV closed"));
         this.streams.clear();
         this.ready = undefined;
@@ -283,6 +288,13 @@ export class AdbClient extends EventEmitter {
           this.write(packet(CMD.AUTH, AUTH_RSAPUBLICKEY, 0, androidPublicKey(this.key()) + "\0"));
           this.setState("awaiting-approval");
           this.emit("approval");
+          // The prompt can be missed (the TV was asleep, or someone pressed Back), and the TV
+          // only asks once per connection. So hang up after a while: the next try asks again.
+          const sock = this.socket;
+          clearTimeout(this.askAgain);
+          this.askAgain = setTimeout(() => {
+            if (this.socket === sock && this.state === "awaiting-approval") sock?.destroy();
+          }, adbTiming.askAgainMs);
         }
         return;
       }
