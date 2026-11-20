@@ -52,6 +52,7 @@ export interface UiDevice {
   room?: string;
   settings: Record<string, unknown>;
   preview?: boolean; // an NDI stream of this device's picture is linked
+  streams?: string[]; // mosaic canvas: the only NDI streams staff may choose from (absent: all)
 }
 
 export interface Channel {

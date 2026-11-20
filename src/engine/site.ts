@@ -20,6 +20,9 @@ export const DeviceSchema = z.object({
   // and the mosaic engine device whose media server can see that stream. Shown beside the
   // device's remote on the touch panel.
   preview: z.object({ device: z.string(), stream: z.string().min(1) }).optional(),
+  // For a mosaic engine canvas: the NDI streams staff may choose from on the touch panel
+  // (full NDI names). Absent means every stream the media server sees.
+  streams: z.array(z.string().min(1)).optional(),
 });
 
 const SceneStep = z.discriminatedUnion("type", [

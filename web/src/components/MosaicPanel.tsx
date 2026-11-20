@@ -51,7 +51,9 @@ export function MosaicPanel({ device, profile, groups, background }: { device: U
   const [picked, setPicked] = useState<Target>();
   const run = (command: string, params: Record<string, unknown>, ok?: string) => act(() => api.command(device.id, command, params), ok);
 
-  const streams = (st.streams as string[] | undefined) ?? [];
+  // The admin may have narrowed the list (Wall sources page), e.g. to leave out the media server's own outputs.
+  const allowed = device.streams;
+  const everyStream = (st.streams as string[] | undefined) ?? [];
   const playlists = (st.playlists as { id: string; name: string }[] | undefined) ?? [];
   const videos = (st.videos as { name: string }[] | undefined) ?? [];
   const slotsOf = (g: string) => (st[`groups.${g}.slots`] as Slot[] | undefined) ?? [];
@@ -67,6 +69,8 @@ export function MosaicPanel({ device, profile, groups, background }: { device: U
   const targetGroup = target?.kind === "slot" ? groups.find((g) => g.id === target.group) : undefined;
   const targetSlot = target?.kind === "slot" ? slotsOf(target.group).find((s) => s.slot === target.slot) : undefined;
   const current = target?.kind === "background" ? bg : targetSlot;
+  // What's on the picked piece stays in the list even if it isn't one of the ticked streams, so it shows as chosen.
+  const streams = allowed ? everyStream.filter((n) => allowed.includes(n) || n === current?.ndiName) : everyStream;
   const where = target?.kind === "background" ? "the background" : targetSlot ? `${targetSlot.name}${groups.length > 1 ? ` of ${targetGroup?.name ?? ""}` : ""}` : "";
 
   const put = (what: { ndiName?: string; playlist?: string; video?: string }, label: string) => {

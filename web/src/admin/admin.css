@@ -137,3 +137,7 @@ input.invalid { outline: 2px solid var(--bad); }
 .remotes .thumb { width: 200px; }
 .remotes .thumb .preview { width: 192px; border-radius: 8px; }
 .remotes .thumb .preview-note { font-size: 11px; left: 6px; bottom: 6px; padding: 2px 8px; }
+/* Wall sources: ticks for which streams staff can choose */
+.source-group { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.source-ticks { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; margin-top: 6px; }
+.source-ticks.single { margin-top: 8px; }

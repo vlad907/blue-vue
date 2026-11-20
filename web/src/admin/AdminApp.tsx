@@ -10,6 +10,7 @@ import { LiveProvider, useLive } from "./live.tsx";
 import { Profiles } from "./Profiles.tsx";
 import { Scenes } from "./Scenes.tsx";
 import { Remotes } from "./Remotes.tsx";
+import { WallSources } from "./WallSources.tsx";
 import { Pairing } from "./Tvs.tsx";
 import "./admin.css";
 
@@ -17,6 +18,7 @@ const PAGES = [
   { id: "devices", label: "Devices" },
   { id: "pairing", label: "TV pairing" },
   { id: "remotes", label: "Remote pictures" },
+  { id: "sources", label: "Wall sources" },
   { id: "walls", label: "Video walls" },
   { id: "rooms", label: "Rooms" },
   { id: "scenes", label: "Scenes" },
@@ -111,6 +113,7 @@ function Shell({ onSignOut }: { onSignOut: () => void }) {
         {page === "devices" && <Devices />}
         {page === "pairing" && <Pairing />}
         {page === "remotes" && <Remotes />}
+        {page === "sources" && <WallSources />}
         {page === "walls" && <Groups />}
         {page === "rooms" && <Rooms />}
         {page === "scenes" && <Scenes />}
