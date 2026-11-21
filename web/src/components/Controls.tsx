@@ -12,6 +12,7 @@ interface Props {
   controls: Control[];
   item?: unknown; // the current item inside a repeated group
   parent?: unknown; // the item of the group around that one (a wall, around its slots)
+  fold?: boolean; // tuck the number pad and arrow keys behind a "Remote keys" row (device cards)
 }
 
 interface Option {
@@ -19,12 +20,20 @@ interface Option {
   label: string;
 }
 
-export function Controls({ device, profile, controls, item, parent }: Props) {
+const KEYS = ["keypad", "dpad"];
+
+export function Controls({ device, profile, controls, item, parent, fold }: Props) {
+  const view = (c: Control, i: number) => <ControlView key={i} device={device} profile={profile} control={c} item={item} parent={parent} />;
+  const keys = fold ? controls.filter((c) => KEYS.includes(c.type)) : [];
   return (
     <div className="controls">
-      {controls.map((c, i) => (
-        <ControlView key={i} device={device} profile={profile} control={c} item={item} parent={parent} />
-      ))}
+      {controls.filter((c) => !keys.includes(c)).map(view)}
+      {keys.length > 0 && (
+        <details className="fold">
+          <summary>Remote keys</summary>
+          <div className="controls">{keys.map(view)}</div>
+        </details>
+      )}
     </div>
   );
 }
@@ -228,7 +237,7 @@ function Keypad({ label, onEnter }: { label: string; onEnter: (n: number) => voi
   const press = (d: string) => setDigits((s) => (s.length < 4 ? s + d : s));
   return (
     <div className="keypad-wrap">
-      <div className="entry">{digits || " "}</div>
+      <div className={`entry${digits ? "" : " blank"}`}>{digits || "Channel"}</div>
       <div className="keypad">
         {"123456789".split("").map((d) => (
           <button key={d} onClick={() => press(d)}>{d}</button>
@@ -256,10 +265,10 @@ function Dpad({ keys, onKey }: { keys: Record<string, string>; onKey: (k: string
   return (
     <div className="keypad dpad">
       {DPAD_LAYOUT.map(([name, text]) =>
-        keys[name] ? <button key={name} onClick={() => onKey(keys[name])}>{text}</button> : <span key={name} />,
+        keys[name] ? <button key={name} className={text.length === 1 ? "arrow" : name === "ok" ? "ok" : ""} onClick={() => onKey(keys[name])}>{text}</button> : <span key={name} />,
       )}
       {extras.map((name) => (
-        <button key={name} onClick={() => onKey(keys[name])}>{name}</button>
+        <button key={name} className="extra" onClick={() => onKey(keys[name])}>{name.replace(/[_-]/g, " ")}</button>
       ))}
     </div>
   );

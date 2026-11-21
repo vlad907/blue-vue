@@ -139,7 +139,7 @@ function Preview({ p, command }: { p: RawProfile; command: string }) {
   const [result, setResult] = useState<{ sent?: string[]; state?: Record<string, unknown>; warnings?: string[]; problems: string[] }>();
   const cmd = p.commands?.[command];
   return (
-    <details className="card preview" open>
+    <details className="card tryit" open>
       <summary>Try it: see exactly what this command sends</summary>
       {cmd?.params && Object.keys(cmd.params).length > 0 && <ParamsForm params={cmd.params} value={params} onChange={setParams} settings={settings} />}
       {settingsFields.length > 0 && (

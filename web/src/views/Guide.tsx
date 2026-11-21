@@ -41,7 +41,7 @@ export function Guide() {
 
   return (
     <>
-      <div className="row-between">
+      <div className="row-between guide-bar">
         <div className="seg">
           {tuners.map((t) => (
             <button key={t.id} className={t.id === tuner ? "active" : ""} onClick={() => setTuner(t.id)}>
@@ -64,6 +64,7 @@ export function Guide() {
               {slots.map((t) => (
                 <div key={t} className="slot" style={{ left: x(t) }}>{fmt(t)}</div>
               ))}
+              <div className="now-mark" style={{ left: x(now) }} title={`Now: ${fmt(now)}`} />
             </div>
           </div>
           {rows.map((r) => (

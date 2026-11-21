@@ -105,7 +105,7 @@ export function MosaicPanel({ device, profile, groups, background }: { device: U
               <div className="split-row">
                 <span className="muted">Split</span>
                 {(g.arrangements ?? []).map((a) => (
-                  <button key={a.id} className={`split${a.id === arrangement ? " active" : ""}`} title={a.name} onClick={() => run("arrange", { group: g.id, arrangement: a.id }, a.name)}>
+                  <button key={a.id} className={`split-btn${a.id === arrangement ? " active" : ""}`} title={a.name} onClick={() => run("arrange", { group: g.id, arrangement: a.id }, a.name)}>
                     <span className="split-icon" aria-hidden="true">
                       {boxes(a.id, a.slots).map(([l, t, w, h], i) => <i key={i} style={{ left: `${l}%`, top: `${t}%`, width: `${w}%`, height: `${h}%` }} />)}
                     </span>

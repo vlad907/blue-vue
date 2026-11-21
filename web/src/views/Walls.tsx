@@ -22,14 +22,14 @@ export function Walls() {
   return (
     <>
       {walls.length > 1 && (
-        <>
+        <div className="toolbar">
           <h2>All walls</h2>
-          <div className="row">
+          <div className="power">
             <button className="btn on" onClick={() => everyWall("All walls on", (w) => api.groupCapability(w.id, "power", "on"))}>All on</button>
             <button className="btn off" onClick={() => everyWall("All walls off", (w) => api.groupCapability(w.id, "power", "off"))}>All off</button>
             {/* No "all TVs to one input" here on purpose: walls use different inputs, and each TV returns to its own when turned on. */}
           </div>
-        </>
+        </div>
       )}
 
       {/* Mosaic walls not tied to a TV wall below, and engine-wide controls like scenes. */}
@@ -82,6 +82,7 @@ function WallCard({ wall: w }: { wall: Wall }) {
             ))}
         </div>
       )}
+      <h4>Screens <span className="hint">tap one to turn it on or off</span></h4>
       <div className="panels" style={w.columns ? { gridTemplateColumns: `repeat(${w.columns}, minmax(0, 1fr))` } : undefined}>
         {members.map(({ device, view }) => {
           const on = isOn(view?.state[powerState(device)]);
@@ -98,9 +99,9 @@ function WallCard({ wall: w }: { wall: Wall }) {
           );
         })}
       </div>
-      <div className="row">
-        <button className="btn on" onClick={() => act(() => api.groupCapability(w.id, "power", "on"), `${w.name} on`)}>On</button>
-        <button className="btn off" onClick={() => act(() => api.groupCapability(w.id, "power", "off"), `${w.name} off`)}>Off</button>
+      <div className="power">
+        <button className="btn on" onClick={() => act(() => api.groupCapability(w.id, "power", "on"), `${w.name} on`)}>All on</button>
+        <button className="btn off" onClick={() => act(() => api.groupCapability(w.id, "power", "off"), `${w.name} off`)}>All off</button>
       </div>
       {inputs.length > 0 && (
         <div>
@@ -160,7 +161,7 @@ function MosaicSection({ device, profile, skip }: { device: UiDevice; profile: U
   const others: Control[] = profile.controls.filter((c) => c !== groupControl && (c.type === "presets" || (c.type === "group" && (!drawn.length || !!c.repeat))));
   if (!unlinked.length && !others.length) return null;
   return (
-    <div>
+    <div className="mosaic-section">
       <h2>{device.name}</h2>
       {drawn.length > 0 && <MosaicPanel device={device} profile={profile} groups={drawn} background />}
       <div className="controls">

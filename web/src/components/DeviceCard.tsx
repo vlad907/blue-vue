@@ -12,16 +12,18 @@ export function DeviceCard({ device }: { device: UiDevice }) {
   return (
     <section className={`card device ${status}`}>
       <header>
-        <h3>{device.name}</h3>
-        <span className={`dot ${status}`} title={view?.problem ?? (view?.online ? "online" : "offline")} />
+        <div>
+          <h3>{device.name}</h3>
+          <div className="meta">
+            {profile?.name ?? device.profile}
+            {agent && <> · via {agent.name}</>}
+          </div>
+        </div>
+        <span className={`pill ${status === "online" ? "ok" : status === "offline" ? "warn" : "bad"}`}>{status === "problem" ? "Needs setup" : status === "online" ? "Online" : "Offline"}</span>
       </header>
-      <div className="meta">
-        {profile?.name ?? device.profile}
-        {agent && <> · via {agent.name}</>}
-      </div>
       {view?.problem && <p className="err">{view.problem}</p>}
       {!view?.problem && view?.error && !view.online && <p className="err">{view.error}</p>}
-      {profile && !view?.problem && <Controls device={device} profile={profile} controls={profile.controls} />}
+      {profile && !view?.problem && <Controls device={device} profile={profile} controls={profile.controls} fold />}
     </section>
   );
 }
