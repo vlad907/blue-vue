@@ -28,7 +28,11 @@ const PYTHON_VERSION = "3.13.9";
 const PYTHON_SHA256 = "91d828c2da3a029b41699e918674a0cb379c02cf20dab9c501306885f837402a";
 // srptools 2 changed a call pyatv 0.18 makes, which breaks pairing; keep it on 1.x until pyatv follows.
 const PYATV = "pyatv==0.18.0";
-const PYATV_PINS = ["srptools==1.0.1"];
+// pydantic pins pydantic-core to one exact version and checks it at import, so a
+// pair that drifts apart fails with "pydantic-core X is incompatible". The wheels
+// are resolved once and cached, so pin both to a known-matching pair rather than
+// let the cross-platform download pick whatever is newest. Bump them together.
+const PYATV_PINS = ["srptools==1.0.1", "pydantic==2.14.4", "pydantic-core==2.50.5"];
 // Reading NDI streams off the network for the live pictures (cyndilib carries the NDI library).
 const NDI_PACKAGES = ["cyndilib==0.1.3", "Pillow==13.0.0"];
 
