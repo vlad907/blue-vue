@@ -35,7 +35,7 @@ export const DeviceSchema = z.object({
 });
 
 /** The touch panel's menu items; the admin can hide the ones a venue doesn't use. */
-export const TABS = ["scenes", "walls", "rooms", "remote", "guide"] as const;
+export const TABS = ["scenes", "walls", "rooms", "audio", "remote", "guide"] as const;
 
 const SceneStep = z.discriminatedUnion("type", [
   z.object({

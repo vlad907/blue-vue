@@ -168,7 +168,7 @@ function isBlank(v: unknown) {
   return v === undefined || v === null || v === "" || (Array.isArray(v) && !v.length);
 }
 
-function resolve(path: string, ctx: Record<string, unknown>): unknown {
+export function resolve(path: string, ctx: Record<string, unknown>): unknown {
   const state = ctx.state as Record<string, unknown>;
   if (path.startsWith("state.")) return state[path.slice(6)];
   if (/^(settings|item|parent|device)\./.test(path)) return lookup(ctx, path);
@@ -209,16 +209,27 @@ function Slider({ label, param, value, onSend }: { label: string; param?: Param;
     return () => clearTimeout(t);
   }, [local]);
   const shown = local ?? value ?? min;
+  const step = param?.step ?? 1;
+  // The − and + buttons move a few steps at a time: easier than the thumb for a small change.
+  const nudge = (by: number) => {
+    const v = Math.min(max, Math.max(min, shown + by));
+    setLocal(v);
+    onSend(v);
+  };
+  const jump = step * (max - min > 40 * step ? 2 : 1);
   return (
-    <label className="field">
+    <div className="field">
       <span>
-        {label} <span className="muted">{value === undefined && local === undefined ? "—" : Math.round(shown)}</span>
+        {label} <span className="muted">{value === undefined && local === undefined ? "—" : `${Math.round(shown)}${/\(dB\)/.test(param?.label ?? "") ? " dB" : ""}`}</span>
       </span>
+      <div className="slide">
+      <button className="nudge" aria-label={`${label} down`} disabled={shown <= min} onClick={() => nudge(-jump)}>−</button>
       <input
+        aria-label={label}
         type="range"
         min={min}
         max={max}
-        step={param?.step ?? 1}
+        step={step}
         value={shown}
         onChange={(e) => {
           const v = Number(e.target.value);
@@ -228,7 +239,9 @@ function Slider({ label, param, value, onSend }: { label: string; param?: Param;
           timer.current = window.setTimeout(() => onSend(v), 100);
         }}
       />
-    </label>
+      <button className="nudge" aria-label={`${label} up`} disabled={shown >= max} onClick={() => nudge(jump)}>+</button>
+      </div>
+    </div>
   );
 }
 

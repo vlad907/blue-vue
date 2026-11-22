@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { api, useLiveState, type Ui } from "./api.ts";
 import { AdminApp } from "./admin/AdminApp.tsx";
 import { AppProvider } from "./context.tsx";
+import { Audio, audioDevices } from "./views/Audio.tsx";
 import { Guide } from "./views/Guide.tsx";
 import { Remote } from "./views/Remote.tsx";
 import { Rooms } from "./views/Rooms.tsx";
@@ -11,7 +12,7 @@ import { TABS } from "./tabs.ts";
 import { Walls } from "./views/Walls.tsx";
 import "./styles.css";
 
-const VIEWS = { scenes: Scenes, walls: Walls, rooms: Rooms, remote: Remote, guide: Guide };
+const VIEWS = { scenes: Scenes, walls: Walls, rooms: Rooms, audio: Audio, remote: Remote, guide: Guide };
 
 // "#walls/centre" is the Video Walls tab with one wall picked (the view reads the rest).
 function readTab() {
@@ -45,7 +46,8 @@ function App() {
   if (!ui || !state) return <p className="empty splash">Loading…</p>;
 
   // The admin can leave menu items off; a link to a hidden one lands on the first that's shown.
-  const tabs = TABS.filter((t) => !ui.hiddenTabs.includes(t.id));
+  // Audio only appears at a venue that has an audio device.
+  const tabs = TABS.filter((t) => !ui.hiddenTabs.includes(t.id) && (t.id !== "audio" || audioDevices(ui).length > 0));
   const current = (tabs.find((t) => t.id === tab) ?? tabs[0] ?? TABS[0]).id;
   const View = VIEWS[current];
   const agents = Object.values(state.agents).filter((a) => a.paired);

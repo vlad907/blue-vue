@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DeviceCard } from "../components/DeviceCard.tsx";
 import { useApp } from "../context.tsx";
+import { audioDevices } from "./Audio.tsx";
 
 const ALL = "__all";
 const NONE = "__none";
@@ -10,7 +11,9 @@ export function Rooms() {
   const [room, setRoom] = useState(ALL);
   const walls = new Set(ui.groups.filter((g) => g.kind === "wall").flatMap((g) => g.devices));
   // Wall panels have their own tab; everything else is grouped by room here.
-  const devices = ui.devices.filter((d) => !walls.has(d.id) && !d.touch?.hidden);
+  // Audio devices have their own tab too, unless the admin has taken it off the menu.
+  const audio = ui.hiddenTabs.includes("audio") ? [] : audioDevices(ui);
+  const devices = ui.devices.filter((d) => !walls.has(d.id) && !d.touch?.hidden && !audio.includes(d));
   const unassigned = devices.filter((d) => !d.room || !ui.rooms.some((r) => r.id === d.room));
   const sections = [
     ...ui.rooms.map((r) => ({ id: r.id, name: r.name, devices: devices.filter((d) => d.room === r.id) })),
