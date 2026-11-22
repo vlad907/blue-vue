@@ -1,4 +1,4 @@
-import type { Param } from "../api.ts";
+import type { Param, Touch } from "../api.ts";
 
 // --- Site shapes (mirror src/engine/site.ts) -----------------------------------
 
@@ -12,6 +12,7 @@ export interface SiteDevice {
   settings: Record<string, unknown>;
   preview?: { device: string; stream: string };
   streams?: string[];
+  touch?: Touch;
 }
 
 export type SceneStep =
@@ -22,6 +23,7 @@ export type SceneStep =
 export interface Site {
   version: 1;
   name: string;
+  hiddenTabs?: string[];
   rooms: { id: string; name: string }[];
   devices: SiteDevice[];
   groups: SiteGroup[];

@@ -199,6 +199,10 @@ button.small { padding: 4px 10px; font-size: 13px; font-weight: 600; border-radi
 .card.wall .power { margin-top: 10px; }
 .mosaic-linked { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 4px; }
 .mosaic-section + .cards.walls { margin-top: 32px; }
+/* The wall sub-menu: one wall at a time, so its card gets the room. */
+.wall-menu { margin: 16px 0 4px; }
+.cards.walls.one { grid-template-columns: minmax(0, 1fr); }
+.cards.walls.one .card.wall:not(:has(.mosaic)) { max-width: 760px; }
 
 /* --- Guide --- */
 .guide-bar { margin-bottom: 14px; }

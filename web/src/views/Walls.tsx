@@ -1,16 +1,36 @@
+import { useEffect, useState } from "react";
 import { api, type Control, type UiDevice, type UiProfile } from "../api.ts";
 import { Controls } from "../components/Controls.tsx";
-import { MosaicPanel, canDraw, type MosaicGroup } from "../components/MosaicPanel.tsx";
+import { MosaicPanel, canDraw, wallShown, type MosaicGroup } from "../components/MosaicPanel.tsx";
 import { useApp } from "../context.tsx";
 import { isOn } from "../template.ts";
 
 type Wall = ReturnType<typeof useApp>["ui"]["groups"][number];
 
+const ALL = "all";
+
+/** The wall picked in the sub-menu, kept in the address ("#walls/centre") so a reload or a bookmark comes back to it. */
+function usePicked() {
+  const read = () => decodeURIComponent(location.hash.slice(1).split("/")[1] ?? "");
+  const [picked, setPicked] = useState(read);
+  useEffect(() => {
+    const onHash = () => setPicked(read());
+    addEventListener("hashchange", onHash);
+    return () => removeEventListener("hashchange", onHash);
+  }, []);
+  return picked;
+}
+
 export function Walls() {
   const { ui, state, act } = useApp();
   const walls = ui.groups.filter((g) => g.kind === "wall");
-  const layoutDevices = ui.devices.filter((d) => ui.profiles[d.profile]?.capabilities.layoutPresets);
   const linked = (deviceId: string) => new Set(walls.filter((w) => w.mosaic?.device === deviceId).map((w) => w.mosaic!.group));
+  // Mosaic walls not tied to a TV wall, and engine-wide controls like scenes: one entry per canvas that has any.
+  const canvases = ui.devices
+    .filter((d) => ui.profiles[d.profile]?.capabilities.layoutPresets && !d.touch?.hidden)
+    .map((d) => ({ device: d, profile: ui.profiles[d.profile], skip: linked(d.id) }))
+    .filter((c) => mosaicParts(c.device, c.profile, c.skip, state.devices[c.device.id]?.state.groupList).any);
+  const picked = usePicked();
 
   const everyWall = (label: string, run: (w: Wall) => Promise<unknown>) =>
     act(async () => {
@@ -18,6 +38,12 @@ export function Walls() {
       const failed = results.flatMap((r, i) => (r.status === "rejected" ? [`${walls[i].name}: ${(r.reason as Error).message}`] : []));
       if (failed.length) throw new Error(failed.join("; "));
     }, label);
+
+  // One wall at a time: with several, a sub-menu picks which. "All walls" keeps the whole page.
+  const entries = [...walls.map((w) => ({ id: w.id, name: w.name })), ...canvases.map((c) => ({ id: c.device.id, name: c.device.name }))];
+  const menu = entries.length > 1;
+  const current = !menu || picked === ALL ? ALL : entries.some((e) => e.id === picked) ? picked : entries[0].id;
+  const show = (id: string) => current === ALL || current === id;
 
   return (
     <>
@@ -32,15 +58,24 @@ export function Walls() {
         </div>
       )}
 
-      {/* Mosaic walls not tied to a TV wall below, and engine-wide controls like scenes. */}
-      {layoutDevices.map((d) => (
-        <MosaicSection key={d.id} device={d} profile={ui.profiles[d.profile]} skip={linked(d.id)} />
+      {menu && (
+        <nav className="seg wall-menu" aria-label="Video walls">
+          {[...entries, { id: ALL, name: "All walls" }].map((e) => (
+            <button key={e.id} className={current === e.id ? "active" : ""} aria-current={current === e.id ? "page" : undefined} onClick={() => { location.hash = `walls/${encodeURIComponent(e.id)}`; }}>
+              {e.name}
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {canvases.filter((c) => show(c.device.id)).map((c) => (
+        <MosaicSection key={c.device.id} device={c.device} profile={c.profile} skip={c.skip} />
       ))}
 
-      <div className="cards walls">
-        {walls.map((w) => <WallCard key={w.id} wall={w} />)}
+      <div className={`cards walls${current === ALL ? "" : " one"}`}>
+        {walls.filter((w) => show(w.id)).map((w) => <WallCard key={w.id} wall={w} />)}
       </div>
-      {!walls.length && !layoutDevices.length && <p className="empty">No video walls yet. Group panels into a wall in the admin.</p>}
+      {!walls.length && !canvases.length && <p className="empty">No video walls yet. Group panels into a wall in the admin.</p>}
     </>
   );
 }
@@ -130,7 +165,8 @@ function LinkedMosaic({ link }: { link: { device: string; group: string } }) {
   const { ui, state } = useApp();
   const device = ui.devices.find((d) => d.id === link.device);
   const profile = device && ui.profiles[device.profile];
-  if (!device || !profile) return null;
+  // The admin has taken this canvas or wall off the touch panel: the TV wall keeps its power and input controls.
+  if (!device || !profile || !wallShown(device, link.group)) return null;
   const groupControl = profile.controls.find((c) => c.type === "group" && c.repeat);
   const list = state.devices[device.id]?.state.groupList;
   const item = Array.isArray(list) ? (list as { id: string }[]).find((g) => g.id === link.group) : undefined;
@@ -149,17 +185,22 @@ function LinkedMosaic({ link }: { link: { device: string; group: string } }) {
   );
 }
 
-function MosaicSection({ device, profile, skip }: { device: UiDevice; profile: UiProfile; skip: Set<string> }) {
-  const { state } = useApp();
+/** What a canvas has to show outside the TV wall cards: its unlinked walls (drawn or plain) and engine-wide controls. */
+function mosaicParts(device: UiDevice, profile: UiProfile, skip: Set<string>, list: unknown) {
   const groupControl = profile.controls.find((c) => c.type === "group" && c.repeat);
-  const list = state.devices[device.id]?.state.groupList;
-  const unlinked = Array.isArray(list) ? (list as { id: string; name?: string }[]).filter((g) => !skip.has(g.id)) : [];
+  const unlinked = Array.isArray(list) ? (list as { id: string; name?: string }[]).filter((g) => !skip.has(g.id) && wallShown(device, g.id)) : [];
   // Walls the engine reports splits for are drawn; tap a piece, then its source. The rest keep the plain controls.
   const drawn = unlinked.filter((g) => canDraw(profile, g as MosaicGroup)) as MosaicGroup[];
   const plain = unlinked.filter((g) => !canDraw(profile, g as MosaicGroup));
   // The drawn panel has the background in it, so the plain background card (a group with no repeat) is left out.
   const others: Control[] = profile.controls.filter((c) => c !== groupControl && (c.type === "presets" || (c.type === "group" && (!drawn.length || !!c.repeat))));
-  if (!unlinked.length && !others.length) return null;
+  return { groupControl, drawn, plain, others, any: unlinked.length > 0 || others.length > 0 };
+}
+
+function MosaicSection({ device, profile, skip }: { device: UiDevice; profile: UiProfile; skip: Set<string> }) {
+  const { state } = useApp();
+  const { groupControl, drawn, plain, others, any } = mosaicParts(device, profile, skip, state.devices[device.id]?.state.groupList);
+  if (!any) return null;
   return (
     <div className="mosaic-section">
       <h2>{device.name}</h2>

@@ -165,3 +165,31 @@ test("admin: an unknown wall agent waits for approval, then connects with the to
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("admin: what the touch panel shows (menu items, canvases, walls, splits) is saved and served to it", async () => {
+  const { call, cleanup } = await setup();
+  try {
+    await call("POST", "/api/admin/setup", { password: "correct horse" });
+    const { site, hash } = (await call("GET", "/api/admin/site")).json;
+    const before = (await call("GET", "/api/ui")).json;
+    assert.deepEqual(before.hiddenTabs, []);
+
+    const touch = { walls: { main: { splits: ["single", "quad"] }, side: { hidden: true } } };
+    const next = {
+      ...site,
+      hiddenTabs: ["guide", "rooms"],
+      devices: [...site.devices, { id: "canvas", name: "Canvas", profile: "mosaic-engine", settings: { host: "10.0.0.5" }, touch }],
+    };
+    const saved = await call("PUT", "/api/admin/site", { site: next, baseHash: hash });
+    assert.equal(saved.status, 200);
+    const ui = (await call("GET", "/api/ui")).json;
+    assert.deepEqual(ui.hiddenTabs, ["guide", "rooms"]);
+    assert.deepEqual(ui.devices.find((d: { id: string }) => d.id === "canvas").touch, touch);
+
+    // A menu item that doesn't exist is refused rather than silently kept.
+    const bad = await call("PUT", "/api/admin/site", { site: { ...next, hiddenTabs: ["nope"] }, baseHash: saved.json.hash });
+    assert.equal(bad.status, 400);
+  } finally {
+    await cleanup();
+  }
+});

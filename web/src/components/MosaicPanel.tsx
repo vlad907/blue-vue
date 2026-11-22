@@ -19,6 +19,11 @@ export function canDraw(profile: UiProfile, group: MosaicGroup) {
   return Array.isArray(group.arrangements) && group.arrangements.length > 0 && !!profile.commands.arrange && !!profile.commands.slot_stream;
 }
 
+/** Whether the admin has left this wall of a canvas on the touch panel. */
+export function wallShown(device: UiDevice, group: string) {
+  return !device.touch?.hidden && !device.touch?.walls?.[group]?.hidden;
+}
+
 /** "BOX1 (ZowieBoxPro-54506)" reads as BOX1, with the encoder's name kept as the small print. */
 function streamLabel(ndi: string) {
   const m = /^(.*?)\s*\((.*)\)\s*$/.exec(ndi);
@@ -94,6 +99,9 @@ export function MosaicPanel({ device, profile, groups, background }: { device: U
           const on = isOn(st[`groups.${g.id}.on`]);
           const activePreset = String(st[`groups.${g.id}.activePreset`] ?? "");
           const layout = boxes(arrangement, slots.length);
+          // The admin may offer only some splits on a wall; the one it's in now stays so it shows as chosen.
+          const offered = device.touch?.walls?.[g.id]?.splits;
+          const splits = (g.arrangements ?? []).filter((a) => !offered || offered.includes(a.id) || a.id === arrangement);
           return (
             <div className="mosaic-wall" key={g.id}>
               <div className="row-between">
@@ -102,9 +110,9 @@ export function MosaicPanel({ device, profile, groups, background }: { device: U
                   {on ? "On" : "Off"}
                 </button>
               </div>
-              <div className="split-row">
+              {splits.length > 1 && <div className="split-row">
                 <span className="muted">Split</span>
-                {(g.arrangements ?? []).map((a) => (
+                {splits.map((a) => (
                   <button key={a.id} className={`split-btn${a.id === arrangement ? " active" : ""}`} title={a.name} onClick={() => run("arrange", { group: g.id, arrangement: a.id }, a.name)}>
                     <span className="split-icon" aria-hidden="true">
                       {boxes(a.id, a.slots).map(([l, t, w, h], i) => <i key={i} style={{ left: `${l}%`, top: `${t}%`, width: `${w}%`, height: `${h}%` }} />)}
@@ -112,7 +120,7 @@ export function MosaicPanel({ device, profile, groups, background }: { device: U
                     {a.name}
                   </button>
                 ))}
-              </div>
+              </div>}
               <div className={`screen${arrangement === "five" ? " wide" : ""}${on ? "" : " off"}`}>
                 {slots.map((s, i) => {
                   const [l, t, w, h] = layout[i] ?? [0, 0, 100, 100];

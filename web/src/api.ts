@@ -53,6 +53,13 @@ export interface UiDevice {
   settings: Record<string, unknown>;
   preview?: boolean; // an NDI stream of this device's picture is linked
   streams?: string[]; // mosaic canvas: the only NDI streams staff may choose from (absent: all)
+  touch?: Touch; // mosaic canvas: what of it the touch panel shows
+}
+
+/** What the admin lets staff see of a mosaic canvas: the canvas itself, each wall, and each wall's splits. */
+export interface Touch {
+  hidden?: boolean;
+  walls?: Record<string, { hidden?: boolean; splits?: string[] }>;
 }
 
 export interface Channel {
@@ -64,6 +71,7 @@ export interface Channel {
 
 export interface Ui {
   name: string;
+  hiddenTabs: string[];
   simulate: boolean;
   rooms: { id: string; name: string }[];
   groups: { id: string; name: string; kind: string; devices: string[]; columns?: number; mosaic?: { device: string; group: string } }[];

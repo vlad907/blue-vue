@@ -10,7 +10,7 @@ export function Rooms() {
   const [room, setRoom] = useState(ALL);
   const walls = new Set(ui.groups.filter((g) => g.kind === "wall").flatMap((g) => g.devices));
   // Wall panels have their own tab; everything else is grouped by room here.
-  const devices = ui.devices.filter((d) => !walls.has(d.id));
+  const devices = ui.devices.filter((d) => !walls.has(d.id) && !d.touch?.hidden);
   const unassigned = devices.filter((d) => !d.room || !ui.rooms.some((r) => r.id === d.room));
   const sections = [
     ...ui.rooms.map((r) => ({ id: r.id, name: r.name, devices: devices.filter((d) => d.room === r.id) })),

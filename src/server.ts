@@ -82,13 +82,14 @@ export async function buildServer({ cfg, state, engine, guide, network, ndi = ne
     }
     return {
       name: site.name,
+      hiddenTabs: site.hiddenTabs ?? [],
       simulate: cfg.simulate,
       rooms: site.rooms,
       groups: site.groups,
       scenes: site.scenes.map(({ id, name, description }) => ({ id, name, description })),
       channels: site.channels,
       agents: site.agents.map(({ id, name }) => ({ id, name })),
-      devices: site.devices.map(({ id, name, profile, location, room, settings, preview, streams }) => ({ id, name, profile, location, room, settings, preview: !!preview, streams })),
+      devices: site.devices.map(({ id, name, profile, location, room, settings, preview, streams, touch }) => ({ id, name, profile, location, room, settings, preview: !!preview, streams, touch })),
       profiles,
     };
   });

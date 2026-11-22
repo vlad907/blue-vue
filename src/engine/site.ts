@@ -23,7 +23,19 @@ export const DeviceSchema = z.object({
   // For a mosaic engine canvas: the NDI streams staff may choose from on the touch panel
   // (full NDI names). Absent means every stream the media server sees.
   streams: z.array(z.string().min(1)).optional(),
+  // For a mosaic engine canvas: what of it staff see on the touch panel. A hidden canvas
+  // (or wall) still works in scenes. `splits` are the arrangement ids a wall offers
+  // (absent: every one the engine reports).
+  touch: z
+    .object({
+      hidden: z.boolean().optional(),
+      walls: z.record(z.object({ hidden: z.boolean().optional(), splits: z.array(z.string().min(1)).optional() })).optional(),
+    })
+    .optional(),
 });
+
+/** The touch panel's menu items; the admin can hide the ones a venue doesn't use. */
+export const TABS = ["scenes", "walls", "rooms", "remote", "guide"] as const;
 
 const SceneStep = z.discriminatedUnion("type", [
   z.object({
@@ -47,6 +59,8 @@ export type SceneStep = z.infer<typeof SceneStep>;
 export const SiteSchema = z.object({
   version: z.literal(1).default(1),
   name: z.string().default("Blue Vue"),
+  // Menu items left off the touch panel (absent: all shown).
+  hiddenTabs: z.array(z.enum(TABS)).optional(),
   rooms: z.array(z.object({ id: Id, name: z.string() })).default([]),
   devices: z.array(DeviceSchema).default([]),
   groups: z
