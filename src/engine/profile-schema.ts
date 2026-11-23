@@ -193,6 +193,8 @@ export const Capabilities = z
     volume: z.object({ set: z.string(), param: z.string(), mute: z.string().optional(), state: z.string().optional() }),
     source: z.object({ select: z.string(), param: z.string(), state: z.string().optional() }),
     layoutPresets: z.object({ recall: z.string(), param: z.string(), optionsFrom: z.string().optional() }),
+    // Switching the screens of one of the device's wall PCs to black and back; `param` names the PC.
+    pcScreens: z.object({ black: z.string(), show: z.string(), param: z.string() }),
   })
   .partial();
 export type Capabilities = z.infer<typeof Capabilities>;

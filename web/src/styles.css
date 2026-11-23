@@ -145,6 +145,8 @@ button.small { padding: 4px 10px; font-size: 13px; font-weight: 600; border-radi
 .controls:empty { display: none; }
 .control-group { background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-s); padding: 12px; }
 .control-group .controls { margin-top: 4px; }
+/* A repeated group with nothing to show for one of its items (a wall PC that reports no screens) leaves no empty box. */
+.control-group:has(> .controls:empty) { display: none; }
 .status-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; min-width: 0; }
 .status-row b { min-width: 0; overflow-wrap: anywhere; text-align: right; font-variant-numeric: tabular-nums; }
 .switch { min-width: 68px; min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel-2); font-weight: 700; color: var(--muted); transition: transform .06s, background .15s; }

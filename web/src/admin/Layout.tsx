@@ -129,6 +129,7 @@ export function Groups() {
                     group={g}
                     mosaicDevices={mosaicDevices.map((d) => ({ value: d.id, label: d.name }))}
                     wallsOf={mosaicWalls}
+                    pcsOf={(d) => { const list = live?.devices[d]?.state.endpointList; return Array.isArray(list) ? (list as { id: string; name?: string }[]) : []; }}
                     takenBy={(device, wallId) => site.groups.find((x) => x.id !== g.id && x.mosaic?.device === device && x.mosaic.group === wallId)?.name}
                     onChange={(m) => set((x) => { x.mosaic = m; })}
                   />
@@ -198,10 +199,11 @@ export function Groups() {
 const nameOf = (site: Site, id: string) => site.devices.find((d) => d.id === id)?.name ?? id;
 
 /** Which mosaic engine wall plays on these panels. Walls are read live from the engine. */
-function MosaicLink({ group: g, mosaicDevices, wallsOf, takenBy, onChange }: {
+function MosaicLink({ group: g, mosaicDevices, wallsOf, pcsOf, takenBy, onChange }: {
   group: SiteGroup;
   mosaicDevices: { value: string; label: string }[];
   wallsOf: (device: string) => { id: string; name?: string }[];
+  pcsOf: (device: string) => { id: string; name?: string }[];
   takenBy: (device: string, wall: string) => string | undefined;
   onChange: (m: SiteGroup["mosaic"]) => void;
 }) {
@@ -226,13 +228,23 @@ function MosaicLink({ group: g, mosaicDevices, wallsOf, takenBy, onChange }: {
             value={g.mosaic?.group}
             empty="Not linked"
             options={walls.map((w) => ({ value: w.id, label: w.name ?? w.id }))}
-            onChange={(w) => onChange(w ? { device, group: w } : undefined)}
+            onChange={(w) => onChange(w ? { ...(g.mosaic?.device === device ? g.mosaic : {}), device, group: w } : undefined)}
           />
         ) : (
-          <Text value={g.mosaic?.group} placeholder="e.g. main-wall" onChange={(w) => onChange(w.trim() ? { device, group: w.trim() } : undefined)} />
+          <Text value={g.mosaic?.group} placeholder="e.g. main-wall" onChange={(w) => onChange(w.trim() ? { ...(g.mosaic?.device === device ? g.mosaic : {}), device, group: w.trim() } : undefined)} />
         )}
         {clash && <span className="bad-text">Also linked to {clash}</span>}
       </Field>
+      {g.mosaic && (
+        <Field label="Wall PC to black out" help="All off switches this PC's screens to black and All on brings them back, for screens with no power control of their own. The PC stays running.">
+          <Pick
+            value={g.mosaic.pc}
+            empty="None"
+            options={pcsOf(device).map((p) => ({ value: p.id, label: p.name ?? p.id }))}
+            onChange={(pc) => onChange({ device: g.mosaic!.device, group: g.mosaic!.group, ...(pc ? { pc } : {}) })}
+          />
+        </Field>
+      )}
     </div>
   );
 }

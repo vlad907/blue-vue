@@ -173,7 +173,7 @@ export function lint(p: Profile): string[] {
 
   for (const [capName, cap] of Object.entries(p.capabilities)) {
     for (const [k, v] of Object.entries(cap as Record<string, string>)) {
-      if (["on", "off", "tune", "set", "mute", "select", "recall"].includes(k) && !commandNames.has(v)) {
+      if (["on", "off", "tune", "set", "mute", "select", "recall", "black", "show"].includes(k) && !commandNames.has(v)) {
         errors.push(`capability ${capName}.${k}: unknown command "${v}"`);
       }
     }

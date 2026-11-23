@@ -289,7 +289,25 @@ export class DeviceManager {
     if (!group) throw Object.assign(new CommandError(`Unknown group "${groupId}"`), { statusCode: 404 });
     // The pause is there so a wall doesn't power up all at once; inputs and the rest can go out quickly.
     const gap = cap === "power" ? group.staggerMs : Math.min(group.staggerMs, 50);
-    await staggered(group.devices, gap, (id) => this.capability(id, cap, action, value));
+    const devices = staggered(group.devices, gap, (id) => this.capability(id, cap, action, value));
+    // A wall whose screens hang off a wall PC: its screens go black with "off" and come back with
+    // "on", so screens without power control of their own go dark too. The PC keeps running.
+    const pc = cap === "power" && (action === "on" || action === "off") ? this.wallPcScreens(group.mosaic, action === "off") : undefined;
+    const results = await Promise.allSettled([devices, pc]);
+    const errors = results.flatMap((r) => (r.status === "rejected" ? [r.reason instanceof Error ? r.reason.message : String(r.reason)] : []));
+    if (errors.length) throw new Error(errors.join("; "));
+  }
+
+  private async wallPcScreens(link: { device: string; pc?: string } | undefined, black: boolean) {
+    if (!link?.pc) return;
+    const rt = this.runtimes.get(link.device);
+    const def = rt?.profile.capabilities.pcScreens;
+    if (!rt || !def) return;
+    try {
+      await this.execute(link.device, black ? def.black : def.show, { [def.param]: link.pc });
+    } catch (err) {
+      throw new Error(`wall PC ${link.pc}: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   /** Devices whose profile offers a capability, e.g. every tuner for the TV guide. */

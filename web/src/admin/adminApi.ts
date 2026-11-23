@@ -39,7 +39,7 @@ export interface SiteGroup {
   devices: string[];
   staggerMs: number;
   columns?: number;
-  mosaic?: { device: string; group: string };
+  mosaic?: { device: string; group: string; pc?: string };
   powerOnInput?: string;
 }
 

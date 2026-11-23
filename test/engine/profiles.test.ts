@@ -658,6 +658,7 @@ test("mosaic engine profile: splits a wall, fills its slots, switches content an
   const wall = { id: "ultrawide", name: "Ultrawide", on: true, arrangement: "full", content: [{ ndiName: "PC (Cam 1)", playlist: "" }] as { ndiName: string; playlist: string }[], presets: [] as { id: string; name: string }[] };
   const background = { on: false, chosen: false, ndiName: "", playlist: "", video: "", signal: "empty" };
   const identify: unknown[] = [];
+  const black = [false, false, false, false]; // the receiving PC's four screens
   const control = () => ({
     groups: [{
       id: wall.id, name: wall.name, activePreset: "", presets: wall.presets, showing: [], noSignal: [],
@@ -665,7 +666,10 @@ test("mosaic engine profile: splits a wall, fills its slots, switches content an
       slots: wall.on ? names[wall.arrangement].map((name, i) => ({ slot: i + 1, name, ndiName: wall.content[i]?.ndiName ?? "", playlist: wall.content[i]?.playlist ?? "", video: "", signal: "ok" })) : [],
       arrangements: [{ id: "full", name: "One stream", slots: 1 }, { id: "two", name: "Two side by side", slots: 2 }, { id: "quad", name: "Four", slots: 4 }],
     }],
-    endpoints: [{ id: "wall-pc-1", name: "Wall PC 1", online: true, displays: 4, displaysOk: 4 }],
+    endpoints: [{
+      id: "wall-pc-1", name: "Wall PC 1", online: true, displays: 4, displaysOk: 4, blank: black.every(Boolean), displaysBlank: black.filter(Boolean).length,
+      screens: black.map((blank, i) => ({ display: i + 1, name: `Screen ${i + 1}`, output: `HDMI-${i + 1}`, blank, ok: true })),
+    }],
     scenes: [], layouts: [], layout: { id: "venue", name: "Venue" },
     ndi: { available: true, streams: ["PC (Cam 1)", "PC (Cam 2)"] },
     playlists: [{ id: "Game day", name: "Game day", videos: 2 }],
@@ -708,6 +712,13 @@ test("mosaic engine profile: splits a wall, fills its slots, switches content an
         return send(200, background);
       }
       if (url.pathname === "/api/endpoints/wall-pc-1/identify") { identify.push(body); return send(200, {}); }
+      if (url.pathname === "/api/endpoints/wall-pc-1/blank") { black.fill(body.on); return send(200, {}); }
+      if ((m = /^\/api\/endpoints\/wall-pc-1\/displays\/(\d+)\/blank$/.exec(url.pathname))) {
+        if (Number(m[1]) > black.length) return send(400, { error: `no screen ${m[1]}` });
+        black[Number(m[1]) - 1] = body.on;
+        return send(200, {});
+      }
+      if (/^\/api\/endpoints\/[^/]+\/(displays\/\d+\/)?blank$/.test(url.pathname)) return send(404, { error: "no such endpoint" });
       send(404, { error: "not found" });
     });
   });
@@ -769,6 +780,25 @@ test("mosaic engine profile: splits a wall, fills its slots, switches content an
 
     await manager.execute("m", "identify_screens", { endpoint: "wall-pc-1" });
     assert.deepEqual(identify, [{ on: true }]);
+
+    // One screen of the PC to black and back, then all of them; the PC itself stays on.
+    const screens = () => (st()["endpoints.wall-pc-1.screens"] as { display: number; blank: boolean }[]).map((x) => x.blank);
+    assert.deepEqual(screens(), [false, false, false, false]);
+    await manager.execute("m", "screen_off", { endpoint: "wall-pc-1", display: 3 });
+    assert.deepEqual(requests.at(-1), { method: "POST", path: "/api/endpoints/wall-pc-1/displays/3/blank", body: { on: true } });
+    assert.deepEqual(screens(), [false, false, true, false]);
+    assert.equal(st()["endpoints.wall-pc-1.blank"], false);
+    await manager.execute("m", "screen_on", { endpoint: "wall-pc-1", display: 3 });
+    assert.deepEqual(requests.at(-1)!.body, { on: false });
+    assert.deepEqual(screens(), [false, false, false, false]);
+    await manager.execute("m", "pc_screens_off", { endpoint: "wall-pc-1" });
+    assert.deepEqual(requests.at(-1), { method: "POST", path: "/api/endpoints/wall-pc-1/blank", body: { on: true } });
+    assert.deepEqual([screens(), st()["endpoints.wall-pc-1.blank"], st()["endpoints.wall-pc-1.online"]], [[true, true, true, true], true, true]);
+    await manager.execute("m", "pc_screens_on", { endpoint: "wall-pc-1" });
+    assert.deepEqual([screens(), st()["endpoints.wall-pc-1.blank"]], [[false, false, false, false], false]);
+    // The engine's own reason comes back for a screen or a PC that isn't there.
+    await assert.rejects(manager.execute("m", "screen_off", { endpoint: "wall-pc-1", display: 9 }), /HTTP 400 Bad Request: no screen 9/);
+    await assert.rejects(manager.execute("m", "pc_screens_off", { endpoint: "nope" }), /HTTP 404 Not Found: no such endpoint/);
   } finally {
     cleanup();
     engine.close();
@@ -827,6 +857,55 @@ test("simulated mosaic engines differ per canvas and react to splits, slots, con
     await manager.execute("inside", "background_on", { on: false });
     assert.equal(st("inside")["background.on"], false);
     assert.deepEqual(slots("inside"), wall);
+
+    // Screens of the simulated wall PC go black one at a time or all together, on one canvas only.
+    const black = (id: string) => (st(id)["endpoints.wall-pc.screens"] as { blank: boolean }[]).map((x) => x.blank);
+    await manager.execute("inside", "screen_off", { endpoint: "wall-pc", display: 2 });
+    assert.deepEqual([black("inside"), black("ultra")], [[false, true, false, false], [false, false, false, false]]);
+    await manager.execute("inside", "pc_screens_off", { endpoint: "wall-pc" });
+    assert.deepEqual([black("inside"), st("inside")["endpoints.wall-pc.blank"]], [[true, true, true, true], true]);
+    await manager.execute("inside", "screen_on", { endpoint: "wall-pc", display: 4 });
+    assert.deepEqual([black("inside"), st("inside")["endpoints.wall-pc.blank"]], [[true, true, true, false], false]);
+    await manager.execute("inside", "pc_screens_on", { endpoint: "wall-pc" });
+    assert.deepEqual(black("inside"), [false, false, false, false]);
+    await assert.rejects(manager.execute("inside", "screen_off", { endpoint: "wall-pc", display: 9 }), /no item with display "9"/);
+  } finally {
+    cleanup();
+  }
+});
+
+test("a wall's All off blacks out the screens of its wall PC, and All on brings them back", async () => {
+  const { manager, state, cleanup } = setup([], true);
+  try {
+    manager.apply(site({
+      devices: [
+        { id: "m", name: "M", profile: "mosaic-engine", settings: { host: "10.0.10.60" } },
+        { id: "tv", name: "TV", profile: "tcl-roku-tv", settings: { host: "10.0.10.61" } },
+      ],
+      groups: [
+        { id: "wall", name: "Wall", kind: "wall", devices: ["tv"], mosaic: { device: "m", group: "wall", pc: "wall-pc" } },
+        { id: "bare", name: "No TVs of its own", kind: "wall", devices: [], mosaic: { device: "m", group: "wall", pc: "wall-pc" } },
+        { id: "plain", name: "Linked, no PC named", kind: "wall", devices: ["tv"], mosaic: { device: "m", group: "wall" } },
+      ],
+    }));
+    const black = () => (state.state.devices.m.state["endpoints.wall-pc.screens"] as { blank: boolean }[]).map((x) => x.blank);
+    const tv = () => state.state.devices.tv.state.power;
+
+    await manager.groupCapability("wall", "power", "off");
+    assert.deepEqual([black(), tv()], [[true, true, true, true], "off"]);
+    await manager.groupCapability("wall", "power", "on");
+    assert.deepEqual([black(), tv()], [[false, false, false, false], "on"]);
+
+    // A wall with no TVs in Blue Vue still goes dark; one with no PC named leaves the screens alone.
+    await manager.groupCapability("bare", "power", "off");
+    assert.deepEqual(black(), [true, true, true, true]);
+    await manager.groupCapability("bare", "power", "on");
+    await manager.groupCapability("plain", "power", "off");
+    assert.deepEqual([black(), tv()], [[false, false, false, false], "off"]);
+    // Other wall functions don't touch the screens.
+    await manager.groupCapability("wall", "source", "select", "hdmi1").catch(() => {});
+    assert.deepEqual(black(), [false, false, false, false]);
+
   } finally {
     cleanup();
   }

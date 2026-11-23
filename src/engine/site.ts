@@ -73,7 +73,9 @@ export const SiteSchema = z.object({
       // How many panels across, so the panel shows the wall's real shape.
       columns: z.number().int().min(1).max(16).optional(),
       // The mosaic engine wall that plays content on these panels.
-      mosaic: z.object({ device: z.string(), group: z.string().min(1) }).optional(),
+      // `pc` is the wall PC (a mosaic endpoint id) whose screens go black on "All off" and come
+      // back on "All on", for screens with no power control of their own. The PC stays running.
+      mosaic: z.object({ device: z.string(), group: z.string().min(1), pc: z.string().min(1).optional() }).optional(),
       // The input every TV in this wall switches to when turned on, e.g. "hdmi1". A TV's own setting wins.
       powerOnInput: z.string().optional(),
     }))

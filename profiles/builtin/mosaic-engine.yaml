@@ -61,6 +61,8 @@ commands:
           "endpoints.{{value.id}}.online": "{{value.online}}"
           "endpoints.{{value.id}}.displaysOk": "{{value.displaysOk}}"
           "endpoints.{{value.id}}.displays": "{{value.displays}}"
+          "endpoints.{{value.id}}.blank": "{{value.blank}}"
+          "endpoints.{{value.id}}.screens": "{{value.screens}}"
       - jsonPath: $.playlists
         set: { playlists: "{{value}}" }
       - jsonPath: $.background
@@ -310,6 +312,67 @@ commands:
           body: '{"on": {{on}}}'
           headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
 
+  # Black screens. A screen of a receiving PC goes black while the PC keeps running, for
+  # screens with no power control of their own. Screens count from 1. The engine answers
+  # 404 for an unknown PC and 400 for an unknown screen or a PC without the Mosaic Receiver.
+  screen_off:
+    label: Switch one screen of a wall PC to black
+    params:
+      endpoint: { type: string, label: Wall PC, optionsFrom: state.endpointList }
+      display: { type: integer, label: Screen number, min: 1, max: 64, default: 1 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/endpoints/{{endpoint}}/displays/{{display}}/blank?canvas={{settings.canvas}}"
+          body: '{"on": true}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+      - { command: read_control }
+    simulatorSets:
+      "endpoints.{{endpoint}}.screens": "{{state.endpoints.[endpoint].screens | patch:display:@display:blank:@state.sim.yes}}"
+  screen_on:
+    label: Bring one screen of a wall PC back from black
+    params:
+      endpoint: { type: string, label: Wall PC, optionsFrom: state.endpointList }
+      display: { type: integer, label: Screen number, min: 1, max: 64, default: 1 }
+    steps:
+      - http:
+          method: POST
+          path: "/api/endpoints/{{endpoint}}/displays/{{display}}/blank?canvas={{settings.canvas}}"
+          body: '{"on": false}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+      - { command: read_control }
+    simulatorSets:
+      "endpoints.{{endpoint}}.screens": "{{state.endpoints.[endpoint].screens | patch:display:@display:blank:@state.sim.no}}"
+      "endpoints.{{endpoint}}.blank": "{{state.sim.no}}"
+  pc_screens_off:
+    label: Switch every screen of a wall PC to black
+    params:
+      endpoint: { type: string, label: Wall PC, optionsFrom: state.endpointList }
+    steps:
+      - http:
+          method: POST
+          path: "/api/endpoints/{{endpoint}}/blank?canvas={{settings.canvas}}"
+          body: '{"on": true}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+      - { command: read_control }
+    simulatorSets:
+      "endpoints.{{endpoint}}.screens": "{{state.sim.screens.black}}"
+      "endpoints.{{endpoint}}.blank": "{{state.sim.yes}}"
+  pc_screens_on:
+    label: Bring every screen of a wall PC back from black
+    params:
+      endpoint: { type: string, label: Wall PC, optionsFrom: state.endpointList }
+    steps:
+      - http:
+          method: POST
+          path: "/api/endpoints/{{endpoint}}/blank?canvas={{settings.canvas}}"
+          body: '{"on": false}'
+          headers: { Content-Type: application/json, X-Api-Key: "{{settings.apiKey}}" }
+      - { command: read_control }
+    simulatorSets:
+      "endpoints.{{endpoint}}.screens": "{{state.sim.screens.lit}}"
+      "endpoints.{{endpoint}}.blank": "{{state.sim.no}}"
+
   # Sound outputs. The engine takes the whole list back, so each change reads
   # the list fresh, changes one value of one output, and sends it all.
   read_audio:
@@ -391,6 +454,7 @@ state:
   "groups.*.activePreset": { type: string, label: Preset on }
   "groups.*.name": { type: string, label: Wall name }
   "endpoints.*.online": { type: boolean, label: Wall PC online }
+  "endpoints.*.blank": { type: boolean, label: Wall PC screens all black }
   "audio.*.volumeDb": { type: number, label: Volume (dB) }
   "audio.*.mute": { type: boolean, label: Muted }
   "audio.*.source": { type: string, label: Plays }
@@ -450,6 +514,8 @@ polls:
 
 capabilities:
   layoutPresets: { recall: recall_preset, param: preset, optionsFrom: state.groupList }
+  # A TV wall's "All off" uses this for the wall PC named on it (Video walls in the admin).
+  pcScreens: { black: pc_screens_off, show: pc_screens_on, param: endpoint }
 
 controls:
   - type: group
@@ -482,6 +548,18 @@ controls:
       - { type: select, label: Playlist, command: background_playlist, param: playlist, options: state.playlists, state: background.playlist, when: state.playlists }
       - { type: select, label: Video file, command: background_video, param: video, options: state.videos, state: background.video, when: state.videos }
       - { type: status, label: Signal, state: background.signal }
+  # Screens to black, one switch per screen of each receiving PC. "On" means the screen is black.
+  # A PC that reports no screens (an older engine, or no Mosaic Receiver) shows nothing here.
+  - type: group
+    repeat: state.endpointList
+    label: "{{item.name}}: screens switched to black"
+    controls:
+      - { type: toggle, label: All screens, "on": pc_screens_off, "off": pc_screens_on, params: { endpoint: "{{item.id}}" }, state: "endpoints.{{item.id}}.blank", when: "endpoints.{{item.id}}.screens" }
+      - type: group
+        repeat: "endpoints.{{item.id}}.screens"
+        label: "{{item.name}}"
+        controls:
+          - { type: toggle, label: Black, "on": screen_off, "off": screen_on, params: { endpoint: "{{parent.id}}", display: "{{item.display}}" }, state: item.blank }
   - type: group
     repeat: state.audioOutputs
     unless: settings.noSound
@@ -509,6 +587,23 @@ simulator:
     sceneList: []
     layoutList: []
     canvasList: [{ id: canvas-1, name: Inside bar, running: true }, { id: canvas-3, name: Ultrawide, running: true }, { id: canvas-4, name: Outside TV, running: true }]
+    # One receiving PC with four screens, and what they look like all black or all lit.
+    endpointList: [{ id: wall-pc, name: Wall PC, online: true }]
+    "endpoints.wall-pc.online": true
+    "endpoints.wall-pc.blank": false
+    "endpoints.wall-pc.screens": &lit
+      - { display: 1, name: Screen 1, output: HDMI-1, blank: false, ok: true }
+      - { display: 2, name: Screen 2, output: HDMI-2, blank: false, ok: true }
+      - { display: 3, name: Screen 3, output: DP-1, blank: false, ok: true }
+      - { display: 4, name: Screen 4, output: DP-2, blank: false, ok: true }
+    "sim.screens.lit": *lit
+    "sim.screens.black":
+      - { display: 1, name: Screen 1, output: HDMI-1, blank: true, ok: true }
+      - { display: 2, name: Screen 2, output: HDMI-2, blank: true, ok: true }
+      - { display: 3, name: Screen 3, output: DP-1, blank: true, ok: true }
+      - { display: 4, name: Screen 4, output: DP-2, blank: true, ok: true }
+    "sim.yes": true
+    "sim.no": false
     # The pieces each split has, for simulated split changes.
     "sim.slots.full":
       - { slot: 1, name: Whole, ndiName: "", playlist: "", video: "", signal: empty }
