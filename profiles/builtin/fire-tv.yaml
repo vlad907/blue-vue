@@ -13,6 +13,9 @@ description: >
   (wake and sleep keys), and the TV reports whether it's awake. HDMI keys
   work on Fire TV smart TVs with HDMI inputs; a Fire TV Stick or Cube has
   none, and turns the TV it's plugged into on and off over HDMI-CEC.
+  A Fire TV in deep standby switches its network port off, so the wake key
+  can't reach it; Blue Vue learns each TV's MAC address while it's awake and
+  sends a wake-on-LAN packet first when the TV isn't answering.
 
 discover: adb
 
@@ -23,6 +26,7 @@ transport:
 
 settings:
   - { key: host, label: IP address, type: string, required: true }
+  - { key: mac, label: MAC address, type: string, help: "Optional. For wake-on-LAN when the TV has switched its network off in standby. Blue Vue learns it from the TV while it's on, so leave blank unless that hasn't worked" }
   - { key: powerOnInput, label: Input when turned on, type: enum, values: [hdmi1, hdmi2, hdmi3, hdmi4], help: "Optional. The input this TV goes to when Blue Vue turns it on, until someone picks an input for it. After that it returns to the input it was last on. Blank uses the wall's choice (Video walls page)" }
 
 commands:

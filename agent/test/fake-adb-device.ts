@@ -19,6 +19,7 @@ export class FakeFireTv {
   awake = false;
   app = "com.amazon.tv.launcher";
   commands: string[] = [];
+  mac = "a0:d0:dc:12:34:56";
   trusted: string[] = []; // public keys (base64) the TV accepted
   prompts = 0; // "Allow debugging?" prompts shown
   allow: "yes" | "no" | "wait" = "yes"; // how the person at the TV answers
@@ -47,6 +48,7 @@ export class FakeFireTv {
       else if (part.startsWith("dumpsys power")) out += `  mWakefulness=${this.awake ? "Awake" : "Asleep"}\n`;
       else if (part.startsWith("dumpsys window")) out += `  mCurrentFocus=Window{4c1f2d8 u0 ${this.app}/${this.app}.Main}\n`;
       else if (part.startsWith("echo model=")) out += "model=AFTKRT\n";
+      else if (part.startsWith("for i in eth0 wlan0")) out += `eth0 up ${this.mac}\nwlan0 down 00:11:22:33:44:55\n`;
       else if (part.startsWith("monkey -p ")) {
         this.app = part.split(" ")[2];
         out += "Events injected: 1\n";

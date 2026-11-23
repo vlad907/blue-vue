@@ -239,7 +239,8 @@ test("Fire TV profile over built-in ADB: asks to be allowed once, discrete power
     await manager.execute("tv", "input", { input: "hdmi3" });
     await manager.execute("tv", "launch", { app: "com.netflix.ninja" });
     assert.equal(tv.awake, true);
-    assert.deepEqual(tv.commands.filter((c) => !c.startsWith("dumpsys")), [
+    // Leaves out the polls and the MAC lookup for wake-on-LAN.
+    assert.deepEqual(tv.commands.filter((c) => !c.startsWith("dumpsys") && !c.startsWith("for i in eth0")), [
       "input keyevent KEYCODE_WAKEUP",
       "input keyevent KEYCODE_TV_INPUT_HDMI_3",
       "monkey -p com.netflix.ninja -c android.intent.category.LAUNCHER 1",

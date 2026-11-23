@@ -4,6 +4,7 @@ import { networkInterfaces } from "node:os";
 import { promisify } from "node:util";
 import { GlobalCacheTransmitter, parsePronto } from "../ir.ts";
 import { AdbClient } from "./adb/client.ts";
+import { MAC_QUERY, learnedMac, parseMac, rememberMac } from "./adb/macs.ts";
 import { Connection, type ConnectionSettings, type RenderedPayload, type TransportConfig, describe, requireSetting } from "./types.ts";
 
 const execFileAsync = promisify(execFile);
@@ -143,14 +144,40 @@ export class AdbConnection extends Connection {
   host: string;
   port: number;
   adb?: string;
+  /** Typed into the device's settings; otherwise the one learned from the TV is used. */
+  mac?: string;
   private client?: AdbClient;
+  private learning = false;
 
   constructor(cfg: TransportConfig, settings: ConnectionSettings) {
     super();
     this.host = requireSetting(settings.host, "host");
     this.port = Number(settings.port ?? cfg.port ?? 5555);
+    this.mac = typeof settings.mac === "string" && settings.mac.trim() ? settings.mac.trim() : undefined;
     // Only the configured adb binary can run; profiles can't name programs.
     this.adb = process.env.ADB_PATH || undefined;
+  }
+
+  /** Where a magic packet goes: the MAC from the settings, else the one learned from the TV. */
+  wakeMac(): string | undefined {
+    return this.mac ?? learnedMac(this.host);
+  }
+
+  /** Reads the TV's MAC while it's awake, so it can be woken from deep standby later. */
+  private async learnMac() {
+    if (this.mac || this.learning) return;
+    this.learning = true;
+    try {
+      const mac = parseMac(await this.client!.shell(MAC_QUERY));
+      if (mac && mac !== learnedMac(this.host)) {
+        rememberMac(this.host, mac);
+        this.log("info", `learned MAC ${mac} for wake-on-LAN`);
+      }
+    } catch {
+      // Not fatal: the next connection tries again.
+    } finally {
+      this.learning = false;
+    }
   }
 
   open() {
@@ -159,7 +186,11 @@ export class AdbConnection extends Connection {
     this.client = c;
     c.on("approval", () => this.log("info", `Asked the TV to allow debugging from this machine. On the TV, tick "Always allow" and press Allow.`));
     c.on("state", (st: string) => {
-      if (st === "connected") this.log("info", `ADB connected${c.banner ? ` (${c.banner.slice(0, 120)})` : ""}`);
+      if (st === "connected") {
+        this.log("info", `ADB connected${c.banner ? ` (${c.banner.slice(0, 120)})` : ""}`);
+        this.setOnline(true);
+        void this.learnMac();
+      }
       if (st !== "connected") this.setOnline(false);
     });
     // Connect now so the TV's prompt shows up right after the device is saved.
@@ -174,6 +205,18 @@ export class AdbConnection extends Connection {
 
   async send(p: RenderedPayload) {
     if (p.kind !== "adb") throw new Error(`ADB can't send ${p.kind} payloads`);
+    // A Fire TV in deep standby has switched its network port off, so the wake key
+    // can't reach it. A magic packet first wakes the port; the power-on retries
+    // then get through. Sent on every try while the TV isn't answering.
+    const mac = this.wakeMac();
+    if (!this.online && mac && p.args.includes("KEYCODE_WAKEUP")) {
+      try {
+        await new WolConnection({ type: "wol" }, { mac }).send({ kind: "wol" });
+        this.log("tx", `wake-on-LAN to ${mac}`);
+      } catch (err) {
+        this.log("error", `wake-on-LAN to ${mac} failed: ${(err as Error).message}`);
+      }
+    }
     this.log("tx", describe(p));
     try {
       let out: string;

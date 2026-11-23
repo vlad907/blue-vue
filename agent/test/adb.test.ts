@@ -7,6 +7,8 @@ import { join } from "node:path";
 import { AdbClient, androidPublicKey, loadAdbKey, packet, parseAndroidPublicKey, Reader, resetAdbKey } from "../src/transports/adb/client.ts";
 import { identityStore } from "../src/transports/androidtv/cert.ts";
 import { FakeFireTv } from "./fake-adb-device.ts";
+import { learnedMac, parseMac, resetMacs } from "../src/transports/adb/macs.ts";
+import { AdbConnection } from "../src/transports/others.ts";
 
 test("ADB messages split correctly from a byte stream", () => {
   const a = packet(0x4e584e43, 1, 2, "host::\0");
@@ -80,4 +82,44 @@ test("a TV with debugging off or a turned-down prompt gives a clear error", asyn
     tv.stop();
   }
   await assert.rejects(new AdbClient("127.0.0.1", tv.port).connect(), /Network debugging|ADB debugging/);
+});
+
+test("picks the MAC of the network port that's up, Ethernet first", () => {
+  assert.equal(parseMac("eth0 up A0:D0:DC:12:34:56\nwlan0 up 11:22:33:44:55:66\n"), "a0:d0:dc:12:34:56");
+  assert.equal(parseMac("eth0 down a0:d0:dc:12:34:56\nwlan0 up 11:22:33:44:55:66\n"), "11:22:33:44:55:66");
+  assert.equal(parseMac("eth0 up 00:00:00:00:00:00\nwlan0\n"), undefined);
+  assert.equal(parseMac(""), undefined);
+});
+
+test("a Fire TV's MAC is learned while it's awake, and wake-on-LAN goes first when it stops answering", async () => {
+  identityStore.dir = mkdtempSync(join(tmpdir(), "adb-"));
+  resetAdbKey();
+  resetMacs();
+  const tv = await new FakeFireTv().start();
+  tv.allow = "yes";
+  const conn = new AdbConnection({ type: "adb" }, { host: "127.0.0.1", port: tv.port });
+  const logs: string[] = [];
+  conn.on("log", (_d: string, t: string) => logs.push(t));
+  try {
+    conn.open();
+    for (let i = 0; i < 50 && !learnedMac("127.0.0.1"); i++) await new Promise((r) => setTimeout(r, 20));
+    assert.equal(learnedMac("127.0.0.1"), "a0:d0:dc:12:34:56");
+    // Kept on disk, for wake-on-LAN after a restart.
+    resetMacs();
+    assert.equal(learnedMac("127.0.0.1"), "a0:d0:dc:12:34:56");
+
+    // Online: no magic packet.
+    await conn.send({ kind: "adb", args: ["input", "keyevent", "KEYCODE_WAKEUP"] });
+    assert.ok(!logs.some((l) => l.startsWith("wake-on-LAN")));
+  } finally {
+    conn.close();
+    tv.stop();
+  }
+  // The TV has gone quiet: the wake key is preceded by a magic packet (and still fails to connect).
+  await assert.rejects(conn.send({ kind: "adb", args: ["input", "keyevent", "KEYCODE_WAKEUP"] }));
+  assert.ok(logs.some((l) => l === "wake-on-LAN to a0:d0:dc:12:34:56"), logs.join("\n"));
+  // Other keys don't send one.
+  logs.length = 0;
+  await assert.rejects(conn.send({ kind: "adb", args: ["input", "keyevent", "KEYCODE_SLEEP"] }));
+  assert.ok(!logs.some((l) => l.startsWith("wake-on-LAN")));
 });
