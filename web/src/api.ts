@@ -129,6 +129,7 @@ export const api = {
     request(`/api/v2/devices/${device}/capabilities/${cap}/${action}`, { value }),
   groupCapability: (group: string, cap: string, action: string, value?: unknown) =>
     request(`/api/v2/groups/${group}/capabilities/${cap}/${action}`, { value }),
+  allWalls: (action: "on" | "off") => request(`/api/v2/walls/power/${action}`, {}),
   scene: (id: string) => request<{ ok: boolean; errors: string[] }>(`/api/v2/scenes/${id}`, {}),
   restartApp: (agent: string, app: string) => request(`/api/v2/agents/${agent}/apps/${encodeURIComponent(app)}/restart`, {}),
 };

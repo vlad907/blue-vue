@@ -515,7 +515,7 @@ polls:
 capabilities:
   layoutPresets: { recall: recall_preset, param: preset, optionsFrom: state.groupList }
   # A TV wall's "All off" uses this for the wall PC named on it (Video walls in the admin).
-  pcScreens: { black: pc_screens_off, show: pc_screens_on, param: endpoint }
+  pcScreens: { black: pc_screens_off, show: pc_screens_on, param: endpoint, blackOne: screen_off, showOne: screen_on, screenParam: display }
 
 controls:
   - type: group
@@ -548,18 +548,6 @@ controls:
       - { type: select, label: Playlist, command: background_playlist, param: playlist, options: state.playlists, state: background.playlist, when: state.playlists }
       - { type: select, label: Video file, command: background_video, param: video, options: state.videos, state: background.video, when: state.videos }
       - { type: status, label: Signal, state: background.signal }
-  # Screens to black, one switch per screen of each receiving PC. "On" means the screen is black.
-  # A PC that reports no screens (an older engine, or no Mosaic Receiver) shows nothing here.
-  - type: group
-    repeat: state.endpointList
-    label: "{{item.name}}: screens switched to black"
-    controls:
-      - { type: toggle, label: All screens, "on": pc_screens_off, "off": pc_screens_on, params: { endpoint: "{{item.id}}" }, state: "endpoints.{{item.id}}.blank", when: "endpoints.{{item.id}}.screens" }
-      - type: group
-        repeat: "endpoints.{{item.id}}.screens"
-        label: "{{item.name}}"
-        controls:
-          - { type: toggle, label: Black, "on": screen_off, "off": screen_on, params: { endpoint: "{{parent.id}}", display: "{{item.display}}" }, state: item.blank }
   - type: group
     repeat: state.audioOutputs
     unless: settings.noSound
@@ -592,16 +580,16 @@ simulator:
     "endpoints.wall-pc.online": true
     "endpoints.wall-pc.blank": false
     "endpoints.wall-pc.screens": &lit
-      - { display: 1, name: Screen 1, output: HDMI-1, blank: false, ok: true }
-      - { display: 2, name: Screen 2, output: HDMI-2, blank: false, ok: true }
-      - { display: 3, name: Screen 3, output: DP-1, blank: false, ok: true }
-      - { display: 4, name: Screen 4, output: DP-2, blank: false, ok: true }
+      - { display: 1, name: "Centre 2x2 (part 1 of 2x1)", output: HDMI-1, blank: false, ok: true }
+      - { display: 2, name: "Centre 2x2 (part 2 of 2x1)", output: HDMI-2, blank: false, ok: true }
+      - { display: 3, name: "Side screen", output: DP-1, blank: false, ok: true }
+      - { display: 4, name: "Menu board", output: DP-2, blank: false, ok: true }
     "sim.screens.lit": *lit
     "sim.screens.black":
-      - { display: 1, name: Screen 1, output: HDMI-1, blank: true, ok: true }
-      - { display: 2, name: Screen 2, output: HDMI-2, blank: true, ok: true }
-      - { display: 3, name: Screen 3, output: DP-1, blank: true, ok: true }
-      - { display: 4, name: Screen 4, output: DP-2, blank: true, ok: true }
+      - { display: 1, name: "Centre 2x2 (part 1 of 2x1)", output: HDMI-1, blank: true, ok: true }
+      - { display: 2, name: "Centre 2x2 (part 2 of 2x1)", output: HDMI-2, blank: true, ok: true }
+      - { display: 3, name: "Side screen", output: DP-1, blank: true, ok: true }
+      - { display: 4, name: "Menu board", output: DP-2, blank: true, ok: true }
     "sim.yes": true
     "sim.no": false
     # The pieces each split has, for simulated split changes.

@@ -194,7 +194,8 @@ export const Capabilities = z
     source: z.object({ select: z.string(), param: z.string(), state: z.string().optional() }),
     layoutPresets: z.object({ recall: z.string(), param: z.string(), optionsFrom: z.string().optional() }),
     // Switching the screens of one of the device's wall PCs to black and back; `param` names the PC.
-    pcScreens: z.object({ black: z.string(), show: z.string(), param: z.string() }),
+    // `blackOne` / `showOne` do the same for a single screen, numbered by `screenParam`.
+    pcScreens: z.object({ black: z.string(), show: z.string(), param: z.string(), blackOne: z.string().optional(), showOne: z.string().optional(), screenParam: z.string().optional() }),
   })
   .partial();
 export type Capabilities = z.infer<typeof Capabilities>;

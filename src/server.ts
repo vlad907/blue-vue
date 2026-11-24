@@ -198,6 +198,13 @@ export async function buildServer({ cfg, state, engine, guide, network, ndi = ne
     return { ok: true };
   });
 
+  // Every wall off or on, and with them every screen of every wall PC.
+  app.post("/api/v2/walls/power/:action", async (req) => {
+    const { action } = z.object({ action: z.enum(["on", "off"]) }).parse(req.params);
+    await engine.devices.allWalls(action);
+    return { ok: true };
+  });
+
   app.post("/api/v2/groups/:id/capabilities/:cap/:action", async (req) => {
     const { id, cap, action } = z.object({ id: z.string(), cap: z.string(), action: z.string() }).parse(req.params);
     const { value } = z.object({ value: z.unknown().optional() }).parse(req.body ?? {});

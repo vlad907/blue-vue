@@ -32,13 +32,6 @@ export function Walls() {
     .filter((c) => mosaicParts(c.device, c.profile, c.skip, state.devices[c.device.id]?.state.groupList).any);
   const picked = usePicked();
 
-  const everyWall = (label: string, run: (w: Wall) => Promise<unknown>) =>
-    act(async () => {
-      const results = await Promise.allSettled(walls.map(run));
-      const failed = results.flatMap((r, i) => (r.status === "rejected" ? [`${walls[i].name}: ${(r.reason as Error).message}`] : []));
-      if (failed.length) throw new Error(failed.join("; "));
-    }, label);
-
   // One wall at a time: with several, a sub-menu picks which. "All walls" keeps the whole page.
   const entries = [...walls.map((w) => ({ id: w.id, name: w.name })), ...canvases.map((c) => ({ id: c.device.id, name: c.device.name }))];
   const menu = entries.length > 1;
@@ -51,8 +44,8 @@ export function Walls() {
         <div className="toolbar">
           <h2>All walls</h2>
           <div className="power">
-            <button className="btn on" onClick={() => everyWall("All walls on", (w) => api.groupCapability(w.id, "power", "on"))}>All on</button>
-            <button className="btn off" onClick={() => everyWall("All walls off", (w) => api.groupCapability(w.id, "power", "off"))}>All off</button>
+            <button className="btn on" onClick={() => act(() => api.allWalls("on"), "All walls on")}>All on</button>
+            <button className="btn off" onClick={() => act(() => api.allWalls("off"), "All walls off")}>All off</button>
             {/* No "all TVs to one input" here on purpose: walls use different inputs, and each TV returns to its own when turned on. */}
           </div>
         </div>

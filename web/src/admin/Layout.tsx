@@ -236,7 +236,7 @@ function MosaicLink({ group: g, mosaicDevices, wallsOf, pcsOf, takenBy, onChange
         {clash && <span className="bad-text">Also linked to {clash}</span>}
       </Field>
       {g.mosaic && (
-        <Field label="Wall PC to black out" help="All off switches this PC's screens to black and All on brings them back, for screens with no power control of their own. The PC stays running.">
+        <Field label="Wall PC to black out" help="Usually None: All off already switches the screens the mosaic engine names after this wall to black, and All on brings them back. Pick a PC only to black out all of its screens with this wall, whatever they are named. The PC stays running.">
           <Pick
             value={g.mosaic.pc}
             empty="None"

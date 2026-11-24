@@ -74,7 +74,12 @@ export const FILTERS: Record<string, Filter> = {
 };
 
 export function isTruthy(v: unknown) {
-  if (typeof v === "string") return ["1", "true", "on", "yes"].includes(v.trim().toLowerCase());
+  if (typeof v === "string") {
+    const t = v.trim().toLowerCase();
+    // A device may report a switch as a number in any form: "1", "1.0", "0.00".
+    if (t !== "" && !Number.isNaN(Number(t))) return Number(t) !== 0;
+    return ["true", "on", "yes"].includes(t);
+  }
   return Boolean(v);
 }
 

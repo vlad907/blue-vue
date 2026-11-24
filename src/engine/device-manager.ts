@@ -181,7 +181,17 @@ export class DeviceManager {
   async executeGroup(groupId: string, command: string, params: Record<string, unknown> = {}) {
     const group = this.site?.groups.find((g) => g.id === groupId);
     if (!group) throw Object.assign(new CommandError(`Unknown group "${groupId}"`), { statusCode: 404 });
-    await staggered(group.devices, group.staggerMs, (id) => this.execute(id, command, params));
+    const devices = staggered(group.devices, group.staggerMs, (id) => this.execute(id, command, params));
+    // A scene that turns a wall off or on by its power command takes the wall PC's screens along too.
+    const power = this.powerAction(group.devices, command);
+    await settle([devices, power ? this.wallScreens(group.mosaic, power === "off") : undefined]);
+  }
+
+  /** "on" or "off" when `command` is how these devices are turned on or off. */
+  private powerAction(ids: string[], command: string): "on" | "off" | undefined {
+    const caps = ids.flatMap((id) => this.runtimes.get(id)?.profile.capabilities.power ?? []);
+    if (!caps.length) return command === "power_off" ? "off" : command === "power_on" ? "on" : undefined;
+    return caps.some((c) => c.off === command) ? "off" : caps.some((c) => c.on === command) ? "on" : undefined;
   }
 
   /** Uses a standard capability (power, tuner, ...) without knowing the device's own command names. */
@@ -292,22 +302,71 @@ export class DeviceManager {
     const devices = staggered(group.devices, gap, (id) => this.capability(id, cap, action, value));
     // A wall whose screens hang off a wall PC: its screens go black with "off" and come back with
     // "on", so screens without power control of their own go dark too. The PC keeps running.
-    const pc = cap === "power" && (action === "on" || action === "off") ? this.wallPcScreens(group.mosaic, action === "off") : undefined;
-    const results = await Promise.allSettled([devices, pc]);
-    const errors = results.flatMap((r) => (r.status === "rejected" ? [r.reason instanceof Error ? r.reason.message : String(r.reason)] : []));
-    if (errors.length) throw new Error(errors.join("; "));
+    const pc = cap === "power" && (action === "on" || action === "off") ? this.wallScreens(group.mosaic, action === "off") : undefined;
+    await settle([devices, pc]);
   }
 
-  private async wallPcScreens(link: { device: string; pc?: string } | undefined, black: boolean) {
-    if (!link?.pc) return;
+  /** Every wall off or on, with every screen of every wall PC: the ones no wall is linked to as well. */
+  async allWalls(action: "on" | "off") {
+    const walls = (this.site?.groups ?? []).filter((g) => g.kind === "wall");
+    const jobs = walls.map((g) =>
+      this.groupCapability(g.id, "power", action).catch((err) => {
+        throw new Error(`${g.name}: ${err instanceof Error ? err.message : err}`);
+      }));
+    for (const rt of this.runtimes.values()) {
+      const def = rt.profile.capabilities.pcScreens;
+      if (!def) continue;
+      for (const pc of this.wallPcs(rt.device.id)) {
+        if (!pc.screens.length) continue;
+        jobs.push(this.execute(rt.device.id, action === "off" ? def.black : def.show, { [def.param]: pc.id }).then(() => undefined, (err) => {
+          throw new Error(`wall PC ${pc.name}: ${err instanceof Error ? err.message : err}`);
+        }));
+      }
+    }
+    await settle(jobs);
+  }
+
+  /** The wall PCs a mosaic device reports, each with its screens. */
+  private wallPcs(deviceId: string) {
+    const state = this.runtimes.get(deviceId)?.state ?? {};
+    const list = Array.isArray(state.endpointList) ? (state.endpointList as { id?: unknown; name?: unknown }[]) : [];
+    return list.filter((e) => e && e.id !== undefined).map((e) => {
+      const screens = state[`endpoints.${e.id}.screens`];
+      return { id: String(e.id), name: String(e.name ?? e.id), screens: Array.isArray(screens) ? (screens as { display?: unknown; name?: unknown }[]) : [] };
+    });
+  }
+
+  /**
+   * Switches a linked wall's screens to black, or back. The screens are the ones the mosaic engine
+   * names after the wall ("Centre 2x2", or "Centre 2x2 (part 1 of 2x2)" when one picture is spread
+   * over several). A wall PC picked in the admin goes black whole instead.
+   */
+  private async wallScreens(link: { device: string; group: string; pc?: string } | undefined, black: boolean) {
+    if (!link) return;
     const rt = this.runtimes.get(link.device);
     const def = rt?.profile.capabilities.pcScreens;
     if (!rt || !def) return;
-    try {
-      await this.execute(link.device, black ? def.black : def.show, { [def.param]: link.pc });
-    } catch (err) {
-      throw new Error(`wall PC ${link.pc}: ${err instanceof Error ? err.message : err}`);
+    const run = (pc: string, command: string, params: Record<string, unknown>) =>
+      this.execute(link.device, command, params).catch((err) => {
+        throw new Error(`wall PC ${pc}: ${err instanceof Error ? err.message : err}`);
+      });
+    if (link.pc) return run(link.pc, black ? def.black : def.show, { [def.param]: link.pc });
+
+    const one = black ? def.blackOne : def.showOne;
+    const wall = String(rt.state[`groups.${link.group}.name`] ?? "").trim().toLowerCase();
+    if (!wall) return;
+    const jobs: Promise<unknown>[] = [];
+    for (const pc of this.wallPcs(link.device)) {
+      const mine = pc.screens.filter((s) => {
+        const name = String(s.name ?? "").trim().toLowerCase();
+        return name === wall || name.startsWith(`${wall} (part `);
+      });
+      if (!mine.length) continue;
+      if (mine.length === pc.screens.length || !one || !def.screenParam) jobs.push(run(pc.name, black ? def.black : def.show, { [def.param]: pc.id }));
+      // One after another: each changes the same PC.
+      else jobs.push(mine.reduce((p, s) => p.then(() => run(pc.name, one, { [def.param]: pc.id, [def.screenParam!]: s.display })), Promise.resolve() as Promise<unknown>));
     }
+    await settle(jobs);
   }
 
   /** Devices whose profile offers a capability, e.g. every tuner for the TV guide. */
@@ -322,6 +381,13 @@ export class DeviceManager {
  * but a 20-panel wall doesn't wait for every TV to confirm before the next.
  * Failures are collected per device.
  */
+/** Waits for every job and reports all the failures together. */
+async function settle(jobs: (Promise<unknown> | undefined)[]) {
+  const results = await Promise.allSettled(jobs);
+  const errors = results.flatMap((r) => (r.status === "rejected" ? [r.reason instanceof Error ? r.reason.message : String(r.reason)] : []));
+  if (errors.length) throw new Error(errors.join("; "));
+}
+
 async function staggered(ids: string[], gapMs: number, run: (id: string) => Promise<unknown>) {
   const jobs: Promise<string | undefined>[] = [];
   for (const [i, id] of ids.entries()) {

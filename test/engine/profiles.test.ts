@@ -78,6 +78,12 @@ test("Atlas profile: subscribes per zone, sends JSON-RPC sets, applies pushed up
     assert.equal(state.state.devices.dsp.state["zones.0.mute"], false);
     assert.equal(state.state.devices.dsp.online, true);
 
+    // Mute reported with a decimal point still reads as muted, so the next press unmutes.
+    client!.write('{"jsonrpc":"2.0","method":"update","params":[{"param":"ZoneMute_0","val":1.0}]}\n');
+    await until(() => state.state.devices.dsp.state["zones.0.mute"] === true);
+    client!.write('{"jsonrpc":"2.0","method":"update","params":[{"param":"ZoneMute_0","val":0.0}]}\n');
+    await until(() => state.state.devices.dsp.state["zones.0.mute"] === false);
+
     await assert.rejects(manager.execute("dsp", "set_gain", { zone: 0, db: 6 }), /between -80 and 0/);
   } finally {
     cleanup();
@@ -896,12 +902,25 @@ test("a wall's All off blacks out the screens of its wall PC, and All on brings 
     await manager.groupCapability("wall", "power", "on");
     assert.deepEqual([black(), tv()], [[false, false, false, false], "on"]);
 
-    // A wall with no TVs in Blue Vue still goes dark; one with no PC named leaves the screens alone.
+    // A wall with no TVs in Blue Vue still goes dark.
     await manager.groupCapability("bare", "power", "off");
     assert.deepEqual(black(), [true, true, true, true]);
     await manager.groupCapability("bare", "power", "on");
+    // With no PC named, the screens the engine names after the wall go black, and only those.
     await manager.groupCapability("plain", "power", "off");
-    assert.deepEqual([black(), tv()], [[false, false, false, false], "off"]);
+    assert.deepEqual([black(), tv()], [[true, true, false, false], "off"]);
+    await manager.groupCapability("plain", "power", "on");
+    assert.deepEqual(black(), [false, false, false, false]);
+    // A scene step that turns the wall off by its power command does the same.
+    await manager.executeGroup("plain", "power_off");
+    assert.deepEqual(black(), [true, true, false, false]);
+    await manager.executeGroup("plain", "power_on");
+    assert.deepEqual(black(), [false, false, false, false]);
+    // Every wall off: every screen of the PC, the ones no wall is named after too.
+    await manager.allWalls("off");
+    assert.deepEqual([black(), tv()], [[true, true, true, true], "off"]);
+    await manager.allWalls("on");
+    assert.deepEqual([black(), tv()], [[false, false, false, false], "on"]);
     // Other wall functions don't touch the screens.
     await manager.groupCapability("wall", "source", "select", "hdmi1").catch(() => {});
     assert.deepEqual(black(), [false, false, false, false]);
