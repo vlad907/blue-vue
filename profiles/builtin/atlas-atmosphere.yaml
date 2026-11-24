@@ -23,6 +23,7 @@ settings:
     fields:
       - { key: index, label: Zone number, type: integer, required: true }
       - { key: name, label: Name, type: string, required: true }
+      - { key: group, label: Group, type: string, help: "Optional. Zones with the same group name get one Source picker on the Audio page that sets them all, e.g. Inside" }
   - key: sources
     label: Sources
     type: list

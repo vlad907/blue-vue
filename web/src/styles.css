@@ -162,6 +162,8 @@ button.small { padding: 4px 10px; font-size: 13px; font-weight: 600; border-radi
 .nudge:disabled { opacity: .4; }
 .cards.zones { margin-top: 12px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 .card.zone h3 { margin: 0 0 12px; }
+.card.zone.group h3 { margin-bottom: 4px; }
+.card.zone.group p { margin: 0 0 12px; }
 .audio + .audio { margin-top: 32px; }
 .audio > .controls { margin-top: 24px; }
 .field input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 36px; margin: 0; background: none; }

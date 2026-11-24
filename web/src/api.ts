@@ -54,6 +54,7 @@ export interface UiDevice {
   preview?: boolean; // an NDI stream of this device's picture is linked
   streams?: string[]; // mosaic canvas: the only NDI streams staff may choose from (absent: all)
   touch?: Touch; // mosaic canvas: what of it the touch panel shows
+  sound?: { device: string; source: string | number }; // mosaic canvas: the audio device source its sound arrives on
 }
 
 /** What the admin lets staff see of a mosaic canvas: the canvas itself, each wall, and each wall's splits. */

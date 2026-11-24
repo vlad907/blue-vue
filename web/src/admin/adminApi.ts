@@ -13,6 +13,7 @@ export interface SiteDevice {
   preview?: { device: string; stream: string };
   streams?: string[];
   touch?: Touch;
+  sound?: { device: string; source: string | number };
 }
 
 export type SceneStep =

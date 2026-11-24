@@ -158,7 +158,6 @@ function ControlView({ device, profile, control: c, item, parent }: { device: Ui
   }
 }
 
-/** Choices for a select/presets: a settings list, the param's settings list, or the enum's values. */
 /**
  * Finds a value for a profile path: a device state key ("power",
  * "groups.main-wall.activePreset", or "state.streams"), or a path into the
@@ -175,7 +174,8 @@ export function resolve(path: string, ctx: Record<string, unknown>): unknown {
   return state[path] ?? lookup(ctx, path);
 }
 
-function optionsFor(c: Control, param: Param | undefined, ctx: Record<string, unknown>, channels: { number: number; name: string }[]): Option[] {
+/** Choices for a select/presets: a settings list, the param's settings list, or the enum's values. */
+export function optionsFor(c: Control, param: Param | undefined, ctx: Record<string, unknown>, channels: { number: number; name: string }[]): Option[] {
   const path = c.options ?? param?.optionsFrom;
   if (path) {
     const list = resolve(render(path, ctx), ctx);

@@ -25,7 +25,7 @@ export function wallShown(device: UiDevice, group: string) {
 }
 
 /** "BOX1 (ZowieBoxPro-54506)" reads as BOX1, with the encoder's name kept as the small print. */
-function streamLabel(ndi: string) {
+export function streamLabel(ndi: string) {
   const m = /^(.*?)\s*\((.*)\)\s*$/.exec(ndi);
   return m ? { short: m[1], detail: m[2] } : { short: ndi, detail: "" };
 }

@@ -194,6 +194,9 @@ export const Capabilities = z
     source: z.object({ select: z.string(), param: z.string(), state: z.string().optional() }),
     layoutPresets: z.object({ recall: z.string(), param: z.string(), optionsFrom: z.string().optional() }),
     // Switching the screens of one of the device's wall PCs to black and back; `param` names the PC.
+    // Choosing what one of the device's sound outputs plays. `outputParam` names the output,
+    // `outputsFrom` is the state list of outputs, and `state` holds what each plays ("*" = output id).
+    soundSource: z.object({ select: z.string(), param: z.string(), outputParam: z.string(), outputsFrom: z.string(), state: z.string(), optionsFrom: z.string() }),
     // `blackOne` / `showOne` do the same for a single screen, numbered by `screenParam`.
     pcScreens: z.object({ black: z.string(), show: z.string(), param: z.string(), blackOne: z.string().optional(), showOne: z.string().optional(), screenParam: z.string().optional() }),
   })

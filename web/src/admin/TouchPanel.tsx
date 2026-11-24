@@ -1,7 +1,7 @@
 import type { Touch } from "../api.ts";
 import { TABS } from "../tabs.ts";
 import { useDraft } from "./draft.tsx";
-import { Check } from "./forms.tsx";
+import { Check, Field, Pick } from "./forms.tsx";
 import { useLive } from "./live.tsx";
 
 // What staff see on the touch panel: which menu items, which mosaic canvases
@@ -47,6 +47,18 @@ export function TouchPanel() {
       else delete d.touch;
       return s;
     });
+  // Every source of every audio device, to say where a canvas's sound arrives.
+  const inputs = site.devices.flatMap((d) =>
+    (Array.isArray(d.settings.sources) ? (d.settings.sources as { index: number; name: string }[]) : []).map((s) => ({ value: `${d.id}|${s.index}`, label: `${d.name}: ${s.name}` })));
+  const setSound = (deviceId: string, v: string) =>
+    update((s) => {
+      const d = s.devices.find((x) => x.id === deviceId);
+      if (!d) return s;
+      const cut = v.lastIndexOf("|");
+      if (cut < 0) delete d.sound;
+      else d.sound = { device: v.slice(0, cut), source: Number.isNaN(Number(v.slice(cut + 1))) ? v.slice(cut + 1) : Number(v.slice(cut + 1)) };
+      return s;
+    });
   const wall = (t: Touch, id: string) => ((t.walls ??= {})[id] ??= {});
 
   return (
@@ -87,6 +99,11 @@ export function TouchPanel() {
             <div className="row-tight">
               <Check value={shown} label="Show this canvas on the touch panel" onChange={(on) => change(c.id, (t) => { t.hidden = !on; })} />
             </div>
+            {inputs.length > 0 && (
+              <Field label="Sound arrives at" help="The audio input this canvas's sound is wired to. On the Audio page each zone can then choose one of this canvas's streams to listen to, in place of that one input.">
+                <Pick value={c.sound ? `${c.sound.device}|${c.sound.source}` : undefined} empty="Not connected" options={inputs} onChange={(v) => setSound(c.id, v)} />
+              </Field>
+            )}
             {shown && rows.map((w) => {
               const saved = c.touch?.walls?.[w.id];
               const all = (w.arrangements ?? []).map((a) => a.id);

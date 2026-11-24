@@ -515,6 +515,7 @@ polls:
 capabilities:
   layoutPresets: { recall: recall_preset, param: preset, optionsFrom: state.groupList }
   # A TV wall's "All off" uses this for the wall PC named on it (Video walls in the admin).
+  soundSource: { select: audio_source, param: source, outputParam: output, outputsFrom: audioOutputs, state: "audio.*.source", optionsFrom: streams }
   pcScreens: { black: pc_screens_off, show: pc_screens_on, param: endpoint, blackOne: screen_off, showOne: screen_on, screenParam: display }
 
 controls:
@@ -570,6 +571,10 @@ simulator:
       - "BOX3 (ZowieBoxPro-54447)"
       - "BOX4 (ZowieBoxPro-54372)"
       - "CHIVE (ZowieBoxPro-54441)"
+    audioOutputs: [{ id: pc-sound, name: PC sound, volumeDb: 0, mute: false, source: "BOX1 (ZowieBoxPro-54506)" }]
+    "audio.pc-sound.volumeDb": 0
+    "audio.pc-sound.mute": false
+    "audio.pc-sound.source": "BOX1 (ZowieBoxPro-54506)"
     playlists: [{ id: Game day, name: Game day, videos: 2 }]
     videos: [{ name: ambient-loop.mp4, kind: video }, { name: promo.mp4, kind: video }]
     sceneList: []

@@ -26,6 +26,10 @@ export const DeviceSchema = z.object({
   // For a mosaic engine canvas: what of it staff see on the touch panel. A hidden canvas
   // (or wall) still works in scenes. `splits` are the arrangement ids a wall offers
   // (absent: every one the engine reports).
+  // For a mosaic engine canvas: where its sound arrives, as one source of an audio device (the
+  // DSP input the media server's sound output is wired to). The Audio page then offers the
+  // canvas's streams in place of that one source.
+  sound: z.object({ device: z.string().min(1), source: z.union([z.string(), z.number()]) }).optional(),
   touch: z
     .object({
       hidden: z.boolean().optional(),

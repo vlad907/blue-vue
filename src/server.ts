@@ -89,7 +89,7 @@ export async function buildServer({ cfg, state, engine, guide, network, ndi = ne
       scenes: site.scenes.map(({ id, name, description }) => ({ id, name, description })),
       channels: site.channels,
       agents: site.agents.map(({ id, name }) => ({ id, name })),
-      devices: site.devices.map(({ id, name, profile, location, room, settings, preview, streams, touch }) => ({ id, name, profile, location, room, settings, preview: !!preview, streams, touch })),
+      devices: site.devices.map(({ id, name, profile, location, room, settings, preview, streams, touch, sound }) => ({ id, name, profile, location, room, settings, preview: !!preview, streams, touch, sound })),
       profiles,
     };
   });
